@@ -176,12 +176,17 @@ def hs_search_deals(properties: list, associations: list, since_iso: str):
         cur = nxt
 
     results = []
+    seen_ids = set()
     for i, (start, end) in enumerate(windows, 1):
         start_ms = int(start.timestamp() * 1000)
         end_ms   = int(end.timestamp()   * 1000)
         batch = _search_deals_window(properties, start_ms, end_ms)
-        results.extend(batch)
-        print(f"    … window {i}/{len(windows)} ({start:%Y-%m}): +{len(batch)} deals (total {len(results)})", flush=True)
+        # Dedupe globally: a deal may appear in multiple windows (e.g., created
+        # Jan 2024, won May 2026 → matches both windows). Keep only the first.
+        new = [d for d in batch if d["id"] not in seen_ids]
+        for d in new: seen_ids.add(d["id"])
+        results.extend(new)
+        print(f"    … window {i}/{len(windows)} ({start:%Y-%m}): +{len(new)} new ({len(batch)} raw, total {len(results)})", flush=True)
 
     if associations and results:
         print(f"    Fetching company associations for {len(results)} deals…", flush=True)
