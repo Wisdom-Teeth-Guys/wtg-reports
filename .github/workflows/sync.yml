@@ -1,27 +1,46 @@
-name: Sync HubSpot to Google Sheets
+name: Sync HubSpot to Google Sheets + Build Dashboards
 
 on:
   schedule:
-    # Every Monday at 6:00 AM Central (12:00 UTC)
-    - cron: "0 12 * * 1"
-  workflow_dispatch:  # allow manual runs from the Actions tab
+    # Daily at 6:00 AM Central (12:00 UTC)
+    - cron: "0 12 * * *"
+  workflow_dispatch:
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - run: pip install -r requirements.txt
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run sync
+      - name: Sync HubSpot → Google Sheets
         env:
           HUBSPOT_TOKEN:   ${{ secrets.HUBSPOT_TOKEN }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_SA_JSON:  ${{ secrets.GOOGLE_SA_JSON }}
-        run: python scripts/sync_hubspot_deals.py
+        run: python -u sync_hubspot_deals.py
+
+      - name: Build Pipeline Action Dashboard
+        env:
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SA_JSON:  ${{ secrets.GOOGLE_SA_JSON }}
+        run: python -u scripts/build_pipeline_dashboard.py
+
+      - name: Build Deal Won Time Dashboard
+        env:
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SA_JSON:  ${{ secrets.GOOGLE_SA_JSON }}
+        run: python -u scripts/build_deal_won_dashboard.py
+
+      - name: Build landing page
+        run: python -u scripts/build_index.py
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy out --project-name=referral-wins-by-insurance-type --branch=main
