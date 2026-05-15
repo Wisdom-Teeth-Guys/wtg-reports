@@ -23,11 +23,13 @@ Discovered endpoints (May 15, 2026):
 API reference: https://developer.spotio2.com
 """
 
+from __future__ import annotations
 import json
 import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 import requests
 
@@ -60,7 +62,7 @@ def _is_token_valid(token: str) -> bool:
     return datetime.now(timezone.utc).timestamp() < (exp - 60)
 
 
-def _load_cached_token() -> str | None:
+def _load_cached_token() -> Optional[str]:
     if not TOKEN_CACHE.exists():
         return None
     try:
