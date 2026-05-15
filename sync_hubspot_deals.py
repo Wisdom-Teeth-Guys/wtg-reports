@@ -326,9 +326,19 @@ def get_sheet():
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
+def fetch_pipelines():
+    """Fetch all deal pipelines so we can resolve pipeline IDs → labels."""
+    r = _request_with_retry("GET", f"{HS_BASE}/crm/v3/pipelines/deals", headers=HEADERS)
+    return {p["id"]: p.get("label", p["id"]) for p in r.json().get("results", [])}
+
+
 def main():
     # Owners no longer needed — Marketer Assigned is a custom property
     owners = {}
+
+    print("Fetching HubSpot pipelines…")
+    pipelines = fetch_pipelines()
+    print(f"  → {len(pipelines)} pipelines")
 
     print("Fetching HubSpot companies…")
     companies = hs_get_all("/crm/v3/objects/companies", COMPANY_PROPERTIES)
@@ -346,6 +356,9 @@ def main():
 
     print("Flattening…")
     deal_rows    = flatten_deals(deals, companies_by_id, owners)
+    # Resolve pipeline ID → human-readable name
+    for r in deal_rows:
+        r["pipeline_name"] = pipelines.get(r.get("pipeline", ""), r.get("pipeline", ""))
     company_rows = companies_to_rows(companies)
     meta_rows = [{
         "key": "last_synced_utc",

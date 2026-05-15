@@ -128,6 +128,10 @@ df.loc[df['Market'].isna(), 'Market'] = df.loc[df['Market'].isna(), 'marketer_as
 # Anything still unmapped → UNK
 df['Market'] = df['Market'].fillna('UNK')
 
+# Pipeline name (for CEO's pipeline-first filter view)
+df['Pipeline'] = df.get('pipeline_name', '').fillna('').astype(str).str.strip()
+df.loc[df['Pipeline'] == '', 'Pipeline'] = '(no pipeline)'
+
 # Filter to Dentist Referral + Orthodontist Referral lead sources only
 # (per Court May 14, 2026: this is the canonical filter, no more pipeline filtering)
 _ALLOWED_LEAD_SOURCES = {'dentist referral', 'orthodontist referral'}
@@ -265,10 +269,12 @@ for (mkt,terr,mk,org), grp in df_won.groupby(['Market','Territory','Marketer','O
     elif apr26>mar26: trend='up'
     elif apr26<mar26: trend='down'
     else: trend='flat'
+    pipelines_for_acct = sorted({p for p in grp['Pipeline'].dropna().unique() if p}) if 'Pipeline' in grp.columns else []
     accounts.append({'mkt':mkt,'terr':terr,'rep':mk,'org':org,'tier':tier,'t12m':t12m,
         'w2026':w2026,'w2025':w2025,'w2024':w2024,'feb26':feb26,'mar26':mar26,'apr26':apr26,
         'trend':trend,'alert':alert,'reason':reason,
-        'jf26':ma26_wins,'jf25':ma25_wins})
+        'jf26':ma26_wins,'jf25':ma25_wins,
+        'pipelines':pipelines_for_acct})
 
 total_accounts = len(accounts)
 alert_counts = {}
@@ -687,6 +693,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fo
 
 <!-- FILTERS -->
 <div class="filters">
+  <div class="fgrp"><label>Pipeline</label>
+    <select id="f-pipeline"><option value="">All Pipelines</option></select></div>
   <div class="fgrp"><label>Territory</label>
     <div class="rep-dropdown" id="terr-dropdown">
       <button class="rep-dd-btn" id="terr-dd-btn" type="button">All Territories <span>&#9662;</span></button>
@@ -1300,25 +1308,43 @@ function getSelectedTerrs(){ return selectedTerrs; }
 function getFilterValues(){
   const terrs=getSelectedTerrs();
   const reps=getSelectedReps();
+  const pipeline=document.getElementById('f-pipeline').value;
   const alert=document.getElementById('f-alert').value;
   const tier=document.getElementById('f-tier').value;
   const trend=document.getElementById('f-trend').value;
-  return {terrs, reps, alert, tier, trend};
+  return {terrs, reps, pipeline, alert, tier, trend};
 }
 
 function matchesFilter(item, fv){
-  // item needs .terr, .rep, .alert, .tier, .trend
+  // item needs .terr, .rep, .alert, .tier, .trend, .pipelines (array)
   if(fv.terrs.size>0 && !fv.terrs.has(item.terr)) return false;
   if(fv.reps.size>0 && !fv.reps.has(item.rep)) return false;
+  if(fv.pipeline){
+    const pls = item.pipelines || [];
+    if(!pls.includes(fv.pipeline)) return false;
+  }
   if(fv.alert && item.alert!==fv.alert) return false;
   if(fv.tier && item.tier!==fv.tier) return false;
   if(fv.trend && item.trend!==fv.trend) return false;
   return true;
 }
 
+// Populate Pipeline dropdown from data
+(function initPipelineFilter(){
+  const sel = document.getElementById('f-pipeline');
+  if(!sel) return;
+  const pipes = new Set();
+  (DATA.accounts || []).forEach(a => (a.pipelines || []).forEach(p => pipes.add(p)));
+  [...pipes].sort().forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = p;
+    sel.appendChild(opt);
+  });
+})();
+
 function updateCharts(){
   const fv = getFilterValues();
-  const isFiltered = fv.terrs.size>0 || fv.reps.size>0 || fv.alert || fv.tier || fv.trend;
+  const isFiltered = fv.terrs.size>0 || fv.reps.size>0 || fv.pipeline || fv.alert || fv.tier || fv.trend;
 
   // Filter accounts
   const filtAccts = DATA.accounts.filter(a=>matchesFilter(a, fv));
@@ -1609,11 +1635,13 @@ function sortDetail(col){
 function getFilteredAccounts(){
   const terrs=getSelectedTerrs();
   const reps=getSelectedReps();
+  const pipeline=document.getElementById('f-pipeline').value;
   const alert=document.getElementById('f-alert').value;
   const tier=document.getElementById('f-tier').value;
   const trend=document.getElementById('f-trend').value;
   let rows=DATA.accounts.filter(a=>
     (terrs.size===0||terrs.has(a.terr))&&(reps.size===0||reps.has(a.rep))&&
+    (!pipeline||(a.pipelines||[]).includes(pipeline))&&
     (!alert||a.alert===alert)&&(!tier||a.tier===tier)&&
     (!trend||a.trend===trend));
   const numCols=[4,5,6,7,8,9];
@@ -1627,8 +1655,8 @@ function getFilteredAccounts(){
 }
 
 function resetFilters(){
-  ['f-alert','f-tier','f-trend'].forEach(id=>{
-    document.getElementById(id).value='';
+  ['f-pipeline','f-alert','f-tier','f-trend'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
   });
   selectedReps = new Set();
   repDdBtn.childNodes[0].textContent = 'All Reps ';
@@ -1654,8 +1682,8 @@ function applyFilters(){
   document.getElementById('cnt-momentum').textContent = (cnts['Momentum']||0).toLocaleString();
 }
 
-['f-alert','f-tier','f-trend'].forEach(id=>{
-  document.getElementById(id).addEventListener('change',applyFilters);
+['f-pipeline','f-alert','f-tier','f-trend'].forEach(id=>{
+  const el=document.getElementById(id); if(el) el.addEventListener('change',applyFilters);
 });
 
 renderDetail();
