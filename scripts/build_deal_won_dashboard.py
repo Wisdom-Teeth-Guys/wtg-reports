@@ -233,7 +233,15 @@ print(f"Won KPIs: this_week={wins_this_week}, last_week={wins_last_week}, "
 # ── Per-account data ─────────────────────────────────────────────────────────
 print("Computing per-account metrics…")
 accounts = []
-for (mkt,terr,mk,org), grp in df_won.groupby(['Market','Territory','Marketer','Org']):
+for (mkt,terr,org), grp in df_won.groupby(['Market','Territory','Org']):
+    _mk_counts = grp[grp['Date']>=T12M_START]['Marketer'].value_counts()
+    if len(_mk_counts) > 0:
+        mk = _mk_counts.index[0]
+        other_count = max(0, len(_mk_counts) - 1)
+        mk_display = f"{mk}" + (f" +{other_count}" if other_count else "")
+    else:
+        mk = 'Unassigned'
+        mk_display = 'Unassigned'
     t12m  = len(grp[(grp['Date']>=T12M_START)&(grp['Date']<=T12M_END)])
     w2024 = len(grp[grp['Year']==2024])
     w2025 = len(grp[grp['Year']==2025])
@@ -276,11 +284,13 @@ for (mkt,terr,mk,org), grp in df_won.groupby(['Market','Territory','Marketer','O
     elif apr26<mar26: trend='down'
     else: trend='flat'
     pipelines_for_acct = sorted({p for p in grp['Pipeline'].dropna().unique() if p}) if 'Pipeline' in grp.columns else []
-    accounts.append({'mkt':mkt,'terr':terr,'rep':mk,'org':org,'tier':tier,'t12m':t12m,
+    all_marketers = sorted({m for m in grp['Marketer'].dropna().unique() if m})
+    accounts.append({'mkt':mkt,'terr':terr,'rep':mk_display,'org':org,'tier':tier,'t12m':t12m,
         'w2026':w2026,'w2025':w2025,'w2024':w2024,'mar26':mar26,'apr26':apr26,
         'trend':trend,'alert':alert,'reason':reason,
         'jf26':ma26_wins,'jf25':ma25_wins,
-        'pipelines':pipelines_for_acct})
+        'pipelines':pipelines_for_acct,
+        'all_marketers':all_marketers})
 
 total_accounts = len(accounts)
 alert_counts = {}
@@ -420,10 +430,16 @@ print(f"Zoom default (Wk 2-17 wins): 2026={_zc} vs 2025={_zp} ({round((_zc/_zp-1
 # ── Monthly heatmap data (May'25–Apr'26) ─────────────────────────────────────
 print("Computing monthly heatmap…")
 heatmap_rows = []
-for (mkt,terr,mk,org), grp_all in df_closed.groupby(['Market','Territory','Marketer','Org']):
-    # Only include if there's activity in the rolling window
+for (mkt,terr,org), grp_all in df_closed.groupby(['Market','Territory','Org']):
     in_window = grp_all[grp_all['YM'].isin(ROLL12)]
     if len(in_window) == 0: continue
+    _mk_counts = in_window['Marketer'].value_counts()
+    if len(_mk_counts) > 0:
+        mk = _mk_counts.index[0]
+        other_count = max(0, len(_mk_counts) - 1)
+        mk_display = f"{mk}" + (f" +{other_count}" if other_count else "")
+    else:
+        mk_display = 'Unassigned'
     months_d, months_w = [], []
     months_d_prev, months_w_prev = [], []
     has_any = False
@@ -443,7 +459,7 @@ for (mkt,terr,mk,org), grp_all in df_closed.groupby(['Market','Territory','Marke
     total_d = sum(x for x in months_d if x)
     total_w = sum(x for x in months_w if x)
     total_pct = round(total_w/total_d*100) if total_d>0 else None
-    heatmap_rows.append({'mkt':mkt,'terr':terr,'rep':mk,'org':org,
+    heatmap_rows.append({'mkt':mkt,'terr':terr,'rep':mk_display,'org':org,
         'months_d':months_d,'months_w':months_w,
         'months_d_prev':months_d_prev,'months_w_prev':months_w_prev,
         'total_d':total_d,'total_w':total_w,'total_pct':total_pct})
@@ -1068,7 +1084,8 @@ function updateZoomChart(){
 }
 
 // ── Rep multi-select dropdown ─────────────────────────────────────────────────
-const allReps = [...new Set(DATA.accounts.map(a=>a.rep))].sort();
+// rep is now a display label like "Brooklyn +2" — use all_marketers list for the filter universe
+const allReps = [...new Set(DATA.accounts.flatMap(a => a.all_marketers || []))].sort();
 let selectedReps = new Set();  // empty = all reps
 const repDdBtn = document.getElementById('rep-dd-btn');
 const repDdMenu = document.getElementById('rep-dd-menu');
@@ -1261,7 +1278,10 @@ function getFilterValues(){
 function matchesFilter(item, fv){
   // item needs .terr, .rep, .alert, .tier, .trend, .pipelines
   if(fv.terrs.size>0 && !fv.terrs.has(item.terr)) return false;
-  if(fv.reps.size>0 && !fv.reps.has(item.rep)) return false;
+  if(fv.reps.size>0){
+    const ms = item.all_marketers || [];
+    if (!ms.some(m => fv.reps.has(m))) return false;
+  }
   if(fv.pipeline){
     const pls = item.pipelines || [];
     if(!pls.includes(fv.pipeline)) return false;
@@ -1472,7 +1492,8 @@ function getFilteredAccounts(){
   const tier=document.getElementById('f-tier').value;
   const trend=document.getElementById('f-trend').value;
   let rows=DATA.accounts.filter(a=>
-    (terrs.size===0||terrs.has(a.terr))&&(reps.size===0||reps.has(a.rep))&&
+    (terrs.size===0||terrs.has(a.terr))&&
+    (reps.size===0|| (a.all_marketers||[]).some(m=>reps.has(m)))&&
     (!pipeline||(a.pipelines||[]).includes(pipeline))&&
     (!alert||a.alert===alert)&&(!tier||a.tier===tier)&&
     (!trend||a.trend===trend));
