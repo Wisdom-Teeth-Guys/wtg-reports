@@ -195,21 +195,29 @@ def find_existing(name):
 
 def main():
     existing = find_existing(NAME)
-    if existing:
-        if "--replace" in sys.argv:
-            print(f"Deleting existing {existing}…")
-            requests.delete(f"{BASE}/automation/v4/flows/{existing}", headers=H)
-        else:
-            print(f"⊘ Already exists (id={existing}). Use --replace to recreate.")
-            return
-
     flow = build_flow()
+
+    if existing and "--recreate" not in sys.argv:
+        # PATCH to update in place — keeps secrets attached to the action
+        print(f"Updating existing workflow {existing} in place (secrets preserved)…")
+        r = requests.patch(f"{BASE}/automation/v4/flows/{existing}", headers=H, json=flow)
+        if r.status_code in (200, 201):
+            d = r.json()
+            print(f"✓ Updated '{d['name']}' (id={d['id']}, enabled={d['isEnabled']})")
+        else:
+            print(f"✗ PATCH {r.status_code}: {r.text[:500]}")
+        return
+
+    if existing and "--recreate" in sys.argv:
+        print(f"Deleting existing {existing} (secrets will need re-adding)…")
+        requests.delete(f"{BASE}/automation/v4/flows/{existing}", headers=H)
+
     r = requests.post(f"{BASE}/automation/v4/flows", headers=H, json=flow)
     if r.status_code in (200, 201):
         d = r.json()
         print(f"✓ Created '{d['name']}' (id={d['id']}, enabled={d['isEnabled']})")
     else:
-        print(f"✗ {r.status_code}  {r.text[:500]}")
+        print(f"✗ POST {r.status_code}: {r.text[:500]}")
 
 
 if __name__ == "__main__":
