@@ -1,0 +1,596 @@
+[
+  {
+    "city": "Austin",
+    "src_pipeline_id": "2161131227",
+    "src_pipeline_label": "Austin - Wisdom Teeth Guys Pipedrive",
+    "dst_pipeline_id": "2011021032",
+    "dst_pipeline_label": "Austin - Wisdom Teeth Guys",
+    "stages": [
+      {
+        "src_stage_id": "3433878213",
+        "src_stage_label": "Holding Stage",
+        "dst_stage_id": "3179122424",
+        "dst_stage_label": "holding stage"
+      },
+      {
+        "src_stage_id": "3433878214",
+        "src_stage_label": "Warm Leads",
+        "dst_stage_id": "3179122425",
+        "dst_stage_label": "Warm leads"
+      },
+      {
+        "src_stage_id": "3433878215",
+        "src_stage_label": "Hot Leads",
+        "dst_stage_id": "3179123386",
+        "dst_stage_label": "hot leads"
+      },
+      {
+        "src_stage_id": "3433878216",
+        "src_stage_label": "Wait-Insurance Info",
+        "dst_stage_id": "3179123387",
+        "dst_stage_label": "wait-Insurance info"
+      },
+      {
+        "src_stage_id": "3433878217",
+        "src_stage_label": "Verify Insurance",
+        "dst_stage_id": "3179123388",
+        "dst_stage_label": "Verify Insurance"
+      },
+      {
+        "src_stage_id": "3433878218",
+        "src_stage_label": "Call With Copay",
+        "dst_stage_id": "3179123389",
+        "dst_stage_label": "Call with Copay"
+      },
+      {
+        "src_stage_id": "3433878219",
+        "src_stage_label": "Verified/Not Scheduled",
+        "dst_stage_id": "3179123390",
+        "dst_stage_label": "Verified / Not Scheduled"
+      },
+      {
+        "src_stage_id": "3433878220",
+        "src_stage_label": "Consult/PreAuthorization",
+        "dst_stage_id": "3179123391",
+        "dst_stage_label": "Consult / Pre Authorization"
+      },
+      {
+        "src_stage_id": "3433878221",
+        "src_stage_label": "Scheduled",
+        "dst_stage_id": "3179123392",
+        "dst_stage_label": "Scheduled"
+      },
+      {
+        "src_stage_id": "3433878222",
+        "src_stage_label": "Scheduled For This Week",
+        "dst_stage_id": "3179123393",
+        "dst_stage_label": "Scheduled for this Week"
+      },
+      {
+        "src_stage_id": "3433878223",
+        "src_stage_label": "File Ins Claim",
+        "dst_stage_id": "3179123394",
+        "dst_stage_label": "File Ins Claim"
+      },
+      {
+        "src_stage_id": "3433878224",
+        "src_stage_label": "Follow Up Care",
+        "dst_stage_id": "3179123395",
+        "dst_stage_label": "Follow UP Care"
+      },
+      {
+        "src_stage_id": "3433878225",
+        "src_stage_label": "Claim Follow Up",
+        "dst_stage_id": "3179123396",
+        "dst_stage_label": "Claim Follow Up"
+      },
+      {
+        "src_stage_id": "3433878226",
+        "src_stage_label": "Closed",
+        "dst_stage_id": "3179123397",
+        "dst_stage_label": "Closed"
+      },
+      {
+        "src_stage_id": "3433878227",
+        "src_stage_label": "Won",
+        "dst_stage_id": "3179123397",
+        "dst_stage_label": "Closed"
+      },
+      {
+        "src_stage_id": "3433878228",
+        "src_stage_label": "Lost",
+        "dst_stage_id": "3179327165",
+        "dst_stage_label": "Closed Lost"
+      }
+    ]
+  },
+  {
+    "city": "Dallas",
+    "src_pipeline_id": "2161217265",
+    "src_pipeline_label": "Dallas - Wisdom Teeth Guys Pipedrive",
+    "dst_pipeline_id": "2010971877",
+    "dst_pipeline_label": "Dallas - Wisdom Teeth Guys",
+    "stages": [
+      {
+        "src_stage_id": "3433841372",
+        "src_stage_label": "Holding Stage",
+        "dst_stage_id": "3179100899",
+        "dst_stage_label": "holding stage"
+      },
+      {
+        "src_stage_id": "3433841373",
+        "src_stage_label": "Warm Leads",
+        "dst_stage_id": "3179100900",
+        "dst_stage_label": "Warm leads"
+      },
+      {
+        "src_stage_id": "3433841374",
+        "src_stage_label": "Hot Leads",
+        "dst_stage_id": "3179100901",
+        "dst_stage_label": "hot leads"
+      },
+      {
+        "src_stage_id": "3433841375",
+        "src_stage_label": "Wait-Insurance Info",
+        "dst_stage_id": "3179100902",
+        "dst_stage_label": "wait-Insurance info"
+      },
+      {
+        "src_stage_id": "3433841376",
+        "src_stage_label": "Verify Insurance",
+        "dst_stage_id": "3179100903",
+        "dst_stage_label": "Verify Insurance"
+      },
+      {
+        "src_stage_id": "3433841377",
+        "src_stage_label": "Call With Copay",
+        "dst_stage_id": "3179100904",
+        "dst_stage_label": "Call with Copay"
+      },
+      {
+        "src_stage_id": "3433841378",
+        "src_stage_label": "Verified/Not Scheduled",
+        "dst_stage_id": "3179100905",
+        "dst_stage_label": "Verified / Not Scheduled"
+      },
+      {
+        "src_stage_id": "3433841379",
+        "src_stage_label": "Consult/PreAuthorization",
+        "dst_stage_id": "3179100906",
+        "dst_stage_label": "Consult / Pre Authorization"
+      },
+      {
+        "src_stage_id": "3433841380",
+        "src_stage_label": "Scheduled",
+        "dst_stage_id": "3179100907",
+        "dst_stage_label": "Scheduled"
+      },
+      {
+        "src_stage_id": "3433841381",
+        "src_stage_label": "Scheduled For This Week",
+        "dst_stage_id": "3179100908",
+        "dst_stage_label": "Scheduled for this Week"
+      },
+      {
+        "src_stage_id": "3433841382",
+        "src_stage_label": "File Ins Claim",
+        "dst_stage_id": "3179100909",
+        "dst_stage_label": "File Ins Claim"
+      },
+      {
+        "src_stage_id": "3433841383",
+        "src_stage_label": "Follow Up Care",
+        "dst_stage_id": "3179100910",
+        "dst_stage_label": "Follow UP Care"
+      },
+      {
+        "src_stage_id": "3433841384",
+        "src_stage_label": "Claim Follow Up",
+        "dst_stage_id": "3179100911",
+        "dst_stage_label": "Claim Follow Up"
+      },
+      {
+        "src_stage_id": "3433841385",
+        "src_stage_label": "Closed",
+        "dst_stage_id": "3179100912",
+        "dst_stage_label": "Closed"
+      },
+      {
+        "src_stage_id": "3433841386",
+        "src_stage_label": "Won",
+        "dst_stage_id": "3179100912",
+        "dst_stage_label": "Closed"
+      },
+      {
+        "src_stage_id": "3433841387",
+        "src_stage_label": "Lost",
+        "dst_stage_id": "3179169514",
+        "dst_stage_label": "Closed Lost"
+      }
+    ]
+  },
+  {
+    "city": "Houston",
+    "src_pipeline_id": "2161131224",
+    "src_pipeline_label": "Houston - Wisdom Teeth Guys Pipedrive",
+    "dst_pipeline_id": "2010983139",
+    "dst_pipeline_label": "Houston - Wisdom Teeth Guys",
+    "stages": [
+      {
+        "src_stage_id": "3433877217",
+        "src_stage_label": "Holding Stage - Follow Up",
+        "dst_stage_id": "3179112156",
+        "dst_stage_label": "holding stage"
+      },
+      {
+        "src_stage_id": "3433877218",
+        "src_stage_label": "Lead",
+        "dst_stage_id": "3179112157",
+        "dst_stage_label": "Warm leads"
+      },
+      {
+        "src_stage_id": "3433877219",
+        "src_stage_label": "Wait - Insurance Info",
+        "dst_stage_id": "3179112159",
+        "dst_stage_label": "wait-Insurance info"
+      },
+      {
+        "src_stage_id": "3433877220",
+        "src_stage_label": "Verify Insurance",
+        "dst_stage_id": "3179112160",
+        "dst_stage_label": "Verify Insurance"
+      },
+      {
+        "src_stage_id": "3433877221",
+        "src_stage_label": "Call with Copay",
+        "dst_stage_id": "3179112161",
+        "dst_stage_label": "Call with Copay"
+      },
+      {
+        "src_stage_id": "3433877222",
+        "src_stage_label": "Verified/Not Scheduled",
+        "dst_stage_id": "3179112162",
+        "dst_stage_label": "Verified / Not Scheduled"
+      },
+      {
+        "src_stage_id": "3433877223",
+        "src_stage_label": "Consult/PreAuthorization",
+        "dst_stage_id": "3179112163",
+        "dst_stage_label": "Consult / Pre Authorization"
+      },
+      {
+        "src_stage_id": "3433877224",
+        "src_stage_label": "Scheduled",
+        "dst_stage_id": "3179112164",
+        "dst_stage_label": "Scheduled"
+      },
+      {
+        "src_stage_id": "3433877225",
+        "src_stage_label": "File Insurance Claim",
+        "dst_stage_id": "3179112166",
+        "dst_stage_label": "File Ins Claim"
+      },
+      {
+        "src_stage_id": "3433877226",
+        "src_stage_label": "Follow Up Care - Referral",
+        "dst_stage_id": "3179112167",
+        "dst_stage_label": "Follow UP Care"
+      },
+      {
+        "src_stage_id": "3433877227",
+        "src_stage_label": "Claim Follow Up",
+        "dst_stage_id": "3179112168",
+        "dst_stage_label": "Claim Follow Up"
+      },
+      {
+        "src_stage_id": "3433877228",
+        "src_stage_label": "Closed",
+        "dst_stage_id": "3179112169",
+        "dst_stage_label": "Closed"
+      },
+      {
+        "src_stage_id": "3433877229",
+        "src_stage_label": "Won",
+        "dst_stage_id": "3179112169",
+        "dst_stage_label": "Closed"
+      },
+      {
+        "src_stage_id": "3433877230",
+        "src_stage_label": "Lost",
+        "dst_stage_id": "3179327163",
+        "dst_stage_label": "Closed Lost"
+      }
+    ]
+  },
+  {
+    "city": "Phoenix",
+    "src_pipeline_id": "2161131216",
+    "src_pipeline_label": "Phoenix - Wisdom Teeth Guys Pipedrive",
+    "dst_pipeline_id": "2011043551",
+    "dst_pipeline_label": "Phoenix - Wisdom Teeth Guys",
+    "stages": [
+      {
+        "src_stage_id": "3433876191",
+        "src_stage_label": "Holding Stage Follow up",
+        "dst_stage_id": "3179186920",
+        "dst_stage_label": "holding stage"
+      },
+      {
+        "src_stage_id": "3433876192",
+        "src_stage_label": "Lead",
+        "dst_stage_id": "3179186921",
+        "dst_stage_label": "Warm leads"
+      },
+      {
+        "src_stage_id": "3433876193",
+        "src_stage_label": "Wait - Insurance Info",
+        "dst_stage_id": "3179186923",
+        "dst_stage_label": "wait-Insurance info"
+      },
+      {
+        "src_stage_id": "3433876194",
+        "src_stage_label": "Verify Insurance",
+        "dst_stage_id": "3179186924",
+        "dst_stage_label": "Verify Insurance"
+      },
+      {
+        "src_stage_id": "3433876195",
+        "src_stage_label": "Call with Copay",
+        "dst_stage_id": "3179186925",
+        "dst_stage_label": "Call with Copay"
+      },
+      {
+        "src_stage_id": "3433876196",
+        "src_stage_label": "Verified/Not Scheduled",
+        "dst_stage_id": "3179186926",
+        "dst_stage_label": "Verified / Not Scheduled"
+      },
+      {
+        "src_stage_id": "3433876197",
+        "src_stage_label": "Consult/PreAuthorization",
+        "dst_stage_id": "3179186927",
+        "dst_stage_label": "Consult / Pre Authorization"
+      },
+      {
+        "src_stage_id": "3433876198",
+        "src_stage_label": "Scheduled",
+        "dst_stage_id": "3179186928",
+        "dst_stage_label": "Scheduled"
+      },
+      {
+        "src_stage_id": "3433876199",
+        "src_stage_label": "File Insurance Claim",
+        "dst_stage_id": "3179186930",
+        "dst_stage_label": "File Ins Claim"
+      },
+      {
+        "src_stage_id": "3433876200",
+        "src_stage_label": "Follow Up Care - Referral",
+        "dst_stage_id": "3179186931",
+        "dst_stage_label": "Follow UP Care"
+      },
+      {
+        "src_stage_id": "3433876201",
+        "src_stage_label": "Claim Follow Up",
+        "dst_stage_id": "3179186932",
+        "dst_stage_label": "Claim Follow Up"
+      },
+      {
+        "src_stage_id": "3433876202",
+        "src_stage_label": "Closed",
+        "dst_stage_id": "3179186933",
+        "dst_stage_label": "Closed"
+      },
+      {
+        "src_stage_id": "3433876203",
+        "src_stage_label": "Won",
+        "dst_stage_id": "3179186933",
+        "dst_stage_label": "Closed"
+      },
+      {
+        "src_stage_id": "3433876204",
+        "src_stage_label": "Lost",
+        "dst_stage_id": "3179245292",
+        "dst_stage_label": "Closed Lost"
+      }
+    ]
+  },
+  {
+    "city": "San Antonio",
+    "src_pipeline_id": "2161131215",
+    "src_pipeline_label": "San Antonio - Wisdom Teeth Guys Pipedrive",
+    "dst_pipeline_id": "2011005657",
+    "dst_pipeline_label": "San Antonio - Wisdom Teeth Guys",
+    "stages": [
+      {
+        "src_stage_id": "3433876177",
+        "src_stage_label": "Holding Stage - Follow Up",
+        "dst_stage_id": "3179134684",
+        "dst_stage_label": "holding stage"
+      },
+      {
+        "src_stage_id": "3433876178",
+        "src_stage_label": "Lead",
+        "dst_stage_id": "3179134685",
+        "dst_stage_label": "Warm leads"
+      },
+      {
+        "src_stage_id": "3433876179",
+        "src_stage_label": "Wait - Insurance Info",
+        "dst_stage_id": "3179134687",
+        "dst_stage_label": "wait-Insurance info"
+      },
+      {
+        "src_stage_id": "3433876180",
+        "src_stage_label": "Verify Insurance",
+        "dst_stage_id": "3179134688",
+        "dst_stage_label": "Verify Insurance"
+      },
+      {
+        "src_stage_id": "3433876181",
+        "src_stage_label": "Call with Copay",
+        "dst_stage_id": "3179134689",
+        "dst_stage_label": "Call with Copay"
+      },
+      {
+        "src_stage_id": "3433876182",
+        "src_stage_label": "Verified/Not Scheduled",
+        "dst_stage_id": "3179134690",
+        "dst_stage_label": "Verified / Not Scheduled"
+      },
+      {
+        "src_stage_id": "3433876183",
+        "src_stage_label": "Consult/PreAuthorization",
+        "dst_stage_id": "3179134691",
+        "dst_stage_label": "Consult / Pre Authorization"
+      },
+      {
+        "src_stage_id": "3433876184",
+        "src_stage_label": "Scheduled",
+        "dst_stage_id": "3179134692",
+        "dst_stage_label": "Scheduled"
+      },
+      {
+        "src_stage_id": "3433876185",
+        "src_stage_label": "File Insurance Claim",
+        "dst_stage_id": "3179134694",
+        "dst_stage_label": "File Ins Claim"
+      },
+      {
+        "src_stage_id": "3433876186",
+        "src_stage_label": "Follow Up Care - Referral",
+        "dst_stage_id": "3179134695",
+        "dst_stage_label": "Follow UP Care"
+      },
+      {
+        "src_stage_id": "3433876187",
+        "src_stage_label": "Claim Follow Up",
+        "dst_stage_id": "3179134696",
+        "dst_stage_label": "Claim Follow Up"
+      },
+      {
+        "src_stage_id": "3433876188",
+        "src_stage_label": "Closed",
+        "dst_stage_id": "3179134697",
+        "dst_stage_label": "Closed"
+      },
+      {
+        "src_stage_id": "3433876189",
+        "src_stage_label": "Won",
+        "dst_stage_id": "3179134697",
+        "dst_stage_label": "Closed"
+      },
+      {
+        "src_stage_id": "3433876190",
+        "src_stage_label": "Lost",
+        "dst_stage_id": "3179327164",
+        "dst_stage_label": "Closed Lost"
+      }
+    ]
+  },
+  {
+    "city": "Utah",
+    "src_pipeline_id": "2161217271",
+    "src_pipeline_label": "Utah - Wisdom Teeth Guys Pipedrive",
+    "dst_pipeline_id": "1981854455",
+    "dst_pipeline_label": "Utah - Wisdom Teeth Guys",
+    "stages": [
+      {
+        "src_stage_id": "3433842375",
+        "src_stage_label": "Holding Stage Follow up",
+        "dst_stage_id": "3134754499",
+        "dst_stage_label": "holding stage"
+      },
+      {
+        "src_stage_id": "3433842376",
+        "src_stage_label": "Warm Leads",
+        "dst_stage_id": "3134754500",
+        "dst_stage_label": "Warm leads"
+      },
+      {
+        "src_stage_id": "3433842377",
+        "src_stage_label": "Hot Leads",
+        "dst_stage_id": "3134754501",
+        "dst_stage_label": "hot leads"
+      },
+      {
+        "src_stage_id": "3433842378",
+        "src_stage_label": "Wait-Insurance Info",
+        "dst_stage_id": "3134754502",
+        "dst_stage_label": "wait-Insurance info"
+      },
+      {
+        "src_stage_id": "3433842379",
+        "src_stage_label": "Verify Insurance",
+        "dst_stage_id": "3134754503",
+        "dst_stage_label": "Verify Insurance"
+      },
+      {
+        "src_stage_id": "3433842380",
+        "src_stage_label": "Call With Copay",
+        "dst_stage_id": "3134754504",
+        "dst_stage_label": "Call with Copay"
+      },
+      {
+        "src_stage_id": "3433842381",
+        "src_stage_label": "Verified/Not Scheduled",
+        "dst_stage_id": "3134754505",
+        "dst_stage_label": "Verified / Not Scheduled"
+      },
+      {
+        "src_stage_id": "3433842382",
+        "src_stage_label": "Consult/PreAuthorization",
+        "dst_stage_id": "3152162510",
+        "dst_stage_label": "Consult / Pre Authorization"
+      },
+      {
+        "src_stage_id": "3433842383",
+        "src_stage_label": "Scheduled",
+        "dst_stage_id": "3152162511",
+        "dst_stage_label": "Scheduled"
+      },
+      {
+        "src_stage_id": "3433842384",
+        "src_stage_label": "Scheduled for Next Date",
+        "dst_stage_id": "3152162512",
+        "dst_stage_label": "Scheduled for this Week"
+      },
+      {
+        "src_stage_id": "3433842385",
+        "src_stage_label": "File Ins Claim",
+        "dst_stage_id": "3152162513",
+        "dst_stage_label": "File Ins Claim"
+      },
+      {
+        "src_stage_id": "3433842386",
+        "src_stage_label": "Follow Up Care - Referral",
+        "dst_stage_id": "3152162514",
+        "dst_stage_label": "Follow UP Care"
+      },
+      {
+        "src_stage_id": "3433842387",
+        "src_stage_label": "Claim Follow Up",
+        "dst_stage_id": "3152162515",
+        "dst_stage_label": "Claim Follow Up"
+      },
+      {
+        "src_stage_id": "3433842388",
+        "src_stage_label": "Closed",
+        "dst_stage_id": "3152162516",
+        "dst_stage_label": "Closed"
+      },
+      {
+        "src_stage_id": "3433842389",
+        "src_stage_label": "Won",
+        "dst_stage_id": "3152162516",
+        "dst_stage_label": "Closed"
+      },
+      {
+        "src_stage_id": "3433842390",
+        "src_stage_label": "Lost",
+        "dst_stage_id": "3179169513",
+        "dst_stage_label": "Closed Lost"
+      }
+    ]
+  }
+]
