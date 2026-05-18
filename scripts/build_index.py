@@ -34,7 +34,7 @@ archive_cards = ""
 for fname in archived:
     label, desc = ARCHIVE_LABELS.get(fname, (fname, ""))
     archive_cards += f"""
-  <a class="card archive" href="archive/{fname}">
+  <a class="card archive" target="_blank" rel="noopener" href="archive/{fname}">
     <h3>{label}</h3>
     <p>{desc}</p>
   </a>"""
@@ -76,15 +76,15 @@ footer {{ margin-top: 40px; text-align: center; color: #a0aec0; font-size: 12px;
 
 <div class="section-title">Live Dashboards <span class="live-badge">AUTO-UPDATING</span></div>
 <div class="grid">
-  <a class="card live" href="pipeline_dashboard.html">
+  <a class="card live" target="_blank" rel="noopener" href="pipeline_dashboard.html">
     <h3>📊 Referral Deals Created Pipeline</h3>
     <p>Account performance, at-risk alerts, tier breakdown, and YoY trend by territory and rep.</p>
   </a>
-  <a class="card live" href="deal_won_time_dashboard.html">
+  <a class="card live" target="_blank" rel="noopener" href="deal_won_time_dashboard.html">
     <h3>⏱️ Referral Deals Closed</h3>
     <p>Won-deals only. Same account view filtered to closed-won deals.</p>
   </a>
-  <a class="card live" href="executive_dashboard.html">
+  <a class="card live" target="_blank" rel="noopener" href="executive_dashboard.html">
     <h3>📊 Executive Dashboard</h3>
     <p>Deals Created (forward indicator) + Deals Closed by week. Filter by Lead Source, Pipeline, and Territory.</p>
   </a>
