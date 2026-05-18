@@ -76,7 +76,14 @@ _before = len(deals)
 deals = deals[deals["city"].notna()].copy()
 print(f"  Filtered to 7 main WTG cities: {len(deals):,} of {_before:,} deals")
 
-CITY_ORDER = ["Dallas", "Houston", "San Antonio", "Austin", "Phoenix", "Utah", "Tucson"]
+# We will also render an "Overall" panel that aggregates ALL cities. To do this
+# we duplicate every deal with city='Overall' so it appears in both its own city
+# panel AND the Overall panel. (Simplest aggregation path.)
+overall_rows = deals.copy()
+overall_rows["city"] = "Overall"
+deals = pd.concat([overall_rows, deals], ignore_index=True)
+
+CITY_ORDER = ["Overall", "Dallas", "Houston", "San Antonio", "Austin", "Phoenix", "Utah", "Tucson"]
 
 
 # ISO week labels per deal
@@ -164,6 +171,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .panel { background: #fff; border-radius: 12px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
 .panel h3 { font-size: 16px; color: #1e3a5f; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
 .panel h3 .city-tag { background: #e0f2fe; color: #075985; font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 600; }
+.panel.overall { background: linear-gradient(180deg, #fffbeb 0%, #fff 60%); border: 1px solid #fde68a; }
+.panel.overall h3 .city-tag { background: #fef3c7; color: #92400e; }
 .totals { display: flex; gap: 16px; font-size: 12px; color: #6b7280; margin-bottom: 8px; }
 .totals .num { font-weight: 700; color: #1e3a5f; font-size: 16px; }
 .totals .vs { color: #94a3b8; }
@@ -341,7 +350,9 @@ function renderPanel(city, data, startWk, endWk) {
 
   const id = city.replace(/\\s+/g,'-').toLowerCase();
   const panel = document.getElementById(`p-${id}`) || (() => {
-    const p = document.createElement('div'); p.className = 'panel'; p.id = `p-${id}`;
+    const p = document.createElement('div');
+    p.className = 'panel' + (city === 'Overall' ? ' overall' : '');
+    p.id = `p-${id}`;
     p.innerHTML = `
       <h3>${city} <span class="city-tag">${city.toUpperCase()}</span></h3>
       <div class="totals">

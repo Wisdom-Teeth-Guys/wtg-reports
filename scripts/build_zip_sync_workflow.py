@@ -34,51 +34,58 @@ SOURCE_CODE = r"""const hubspot = require('@hubspot/api-client');
 
 // LOGIC: Company zip ALWAYS wins (referral source location drives territory),
 // patient/deal zip is only used when the company has no zip yet.
-//
-//   company.zip set      → set deal.postal_code = company.zip   (override)
-//   company.zip empty    → push the deal's zip into company.zip (fill in)
-//   both empty           → leave both alone
-//   no company associated → fall back to whatever deal-side zip exists
 
 exports.main = async (event, callback) => {
   const dealPostal = (event.inputFields['postal_code'] || '').trim();
   const migrated   = (event.inputFields['migrated_zip_code'] || '').trim();
   const zipCode    = (event.inputFields['zip_code'] || '').trim();
   const dealOwnZip = dealPostal || migrated || zipCode || '';
+  console.log('[zip-sync] inputs:', { dealPostal, migrated, zipCode, dealOwnZip });
 
-  let resultZip = dealOwnZip;  // default: keep whatever the deal already has
+  let resultZip = dealOwnZip;
+  let debug = '';
 
   try {
     const client = new hubspot.Client({ accessToken: process.env.HUBSPOT_ACCESS_TOKEN });
     const dealId = event.object.objectId;
+    console.log('[zip-sync] dealId:', dealId);
 
     const assocResp = await client.crm.associations.v4.basicApi.getPage(
       'deals', dealId, 'companies'
     );
     const results = assocResp.results || [];
+    console.log('[zip-sync] associations found:', results.length);
+    debug = `assoc=${results.length}`;
 
     if (results.length > 0) {
-      const companyId = results[0].toObjectId;  // first/primary associated company
+      const companyId = results[0].toObjectId;
+      console.log('[zip-sync] first company id:', companyId);
+      debug += `;coId=${companyId}`;
+
       const co = await client.crm.companies.basicApi.getById(companyId, ['zip']);
+      console.log('[zip-sync] company properties:', JSON.stringify(co.properties));
       const companyZip = (co.properties.zip || '').trim();
+      debug += `;coZip="${companyZip}"`;
 
       if (companyZip) {
-        // Company zip exists → it ALWAYS wins, even over a deal-side zip
         resultZip = companyZip;
+        console.log('[zip-sync] using company zip:', companyZip);
       } else if (dealOwnZip) {
-        // Company is missing zip but deal has one → fill in company.zip
+        console.log('[zip-sync] pushing deal zip to company:', dealOwnZip);
         await client.crm.companies.basicApi.update(companyId, {
           properties: { zip: dealOwnZip }
         });
         resultZip = dealOwnZip;
       }
-      // else: both empty → no-op
     }
   } catch (e) {
-    // Non-fatal — return whatever deal-side zip we had
+    console.log('[zip-sync] ERROR:', e.message || e);
+    if (e.response && e.response.body) console.log('[zip-sync] error body:', JSON.stringify(e.response.body));
+    debug += `;err=${e.message || e}`;
   }
 
-  callback({ outputFields: { zip: resultZip } });
+  console.log('[zip-sync] final resultZip:', resultZip);
+  callback({ outputFields: { zip: resultZip, debug: debug } });
 };
 """
 
@@ -147,7 +154,10 @@ def build_flow():
                     {"name": "migrated_zip_code", "value": {"propertyName": "migrated_zip_code", "type": "OBJECT_PROPERTY"}},
                     {"name": "zip_code", "value": {"propertyName": "zip_code", "type": "OBJECT_PROPERTY"}},
                 ],
-                "outputFields": [{"name": "zip", "type": "STRING"}],
+                "outputFields": [
+                    {"name": "zip", "type": "STRING"},
+                    {"name": "debug", "type": "STRING"},
+                ],
                 "connection": {"edgeType": "STANDARD", "nextActionId": "2"},
                 "type": "CUSTOM_CODE",
             },
