@@ -79,11 +79,12 @@ def request_stats(target_id: str, target_type: str = "callcenter"):
         "target_id":        target_id,
         "target_type":      target_type,
         "stat_type":        "calls",
-        "export_type":      "stats",   # required by Dialpad
+        "export_type":      "stats",
         "is_today":         False,
         "timezone":         "America/Chicago",
-        "group_by":         "day",
         "coaching_group":   False,
+        # group_by removed — Dialpad rejected "day" as invalid enum.
+        # The stats CSV is daily by default for "calls" stat_type.
     }
     r = requests.post(f"{BASE}/stats", headers={**H, "Content-Type": "application/json"},
                       json=payload, timeout=30)
