@@ -107,7 +107,7 @@ def request_records_export(target_id):
     return r.json().get("request_id")
 
 
-def poll_for_url(request_id, max_wait_s=300):
+def poll_for_url(request_id, max_wait_s=900):  # 15 min — Dialpad records jobs sometimes take >5 min
     """Poll until status=='complete' and download_url is present, or timeout."""
     for _ in range(max_wait_s // 2):
         time.sleep(2)
