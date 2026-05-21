@@ -57,9 +57,11 @@ DAYS_BACK  = (YEAR_END - YEAR_START).days
 
 
 def _request_with_retry(method, url, **kwargs):
+    kwargs.setdefault("timeout", 60)
+    r = None
     for attempt in range(6):
         try:
-            r = requests.request(method, url, timeout=60, **kwargs)
+            r = requests.request(method, url, **kwargs)
         except requests.exceptions.RequestException:
             time.sleep(2 ** attempt); continue
         if r.status_code == 429 or r.status_code >= 500:
