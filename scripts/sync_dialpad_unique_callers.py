@@ -1,20 +1,31 @@
 #!/usr/bin/env python3
 """
-Pull individual call records from Dialpad and count UNIQUE inbound callers
-(by external phone number) per contact center per ISO week.
+Pull individual call records from Dialpad via the Stats API's records export
+and count UNIQUE inbound callers (by external phone number) per contact center
+per ISO week.
+
+Approach:
+  POST /api/v2/stats with stat_type='calls' AND export_type='records'
+  → returns request_id
+  → poll GET /api/v2/stats/{request_id} until status='complete'
+  → download CSV from download_url
+  → CSV has per-call rows with external_number + direction + date_started
 
 Writes to a separate "WTG Dialpad Data" sheet:
-  - unique_callers_raw           — center × week × unique caller count
-  - unique_callers_by_market_week — pivot by market
+  - unique_callers_raw            — center × week × unique caller count
+  - unique_callers_by_market_week — pivot by WTG market
 
 Env:
   DIALPAD_API_KEY
   GOOGLE_SA_JSON
-  DIALPAD_SHEET_ID   (target sheet)
+  DIALPAD_SHEET_ID    (target sheet)
 """
 
+import csv
+import io
 import json
 import os
+import re
 import sys
 import time
 from collections import defaultdict
@@ -40,16 +51,16 @@ API_KEY = os.environ["DIALPAD_API_KEY"]
 BASE = "https://dialpad.com/api/v2"
 H = {"Authorization": f"Bearer {API_KEY}", "Accept": "application/json"}
 
-YEAR_START_MS = int(datetime(date.today().year, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
-NOW_MS = int(datetime.now(timezone.utc).timestamp() * 1000)
+YEAR_START = date(date.today().year, 1, 1)
+YEAR_END   = date.today()
+DAYS_BACK  = (YEAR_END - YEAR_START).days
 
 
 def _request_with_retry(method, url, **kwargs):
-    """HTTP request with retry on 429/5xx."""
     for attempt in range(6):
         try:
             r = requests.request(method, url, timeout=60, **kwargs)
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             time.sleep(2 ** attempt); continue
         if r.status_code == 429 or r.status_code >= 500:
             time.sleep(2 ** attempt); continue
@@ -57,106 +68,171 @@ def _request_with_retry(method, url, **kwargs):
     return r
 
 
-# ─── 1) List call centers ───
-print("Fetching contact centers…", flush=True)
-centers = []
-cursor = None
-while True:
-    params = {"limit": 100}
-    if cursor: params["cursor"] = cursor
-    r = _request_with_retry("GET", f"{BASE}/callcenters", headers=H, params=params)
-    body = r.json()
-    centers.extend(body.get("items", []))
-    cursor = body.get("cursor")
-    if not cursor: break
-print(f"  → {len(centers)} centers", flush=True)
+def list_callcenters():
+    centers = []
+    cur = None
+    while True:
+        params = {"limit": 100}
+        if cur: params["cursor"] = cur
+        r = _request_with_retry("GET", f"{BASE}/callcenters", headers=H, params=params)
+        body = r.json()
+        centers.extend(body.get("items", []))
+        cur = body.get("cursor")
+        if not cur: break
+    return centers
 
 
-# ─── 2) For each center, paginate /calls and collect unique caller numbers per week ───
+def request_records_export(target_id):
+    """POST a records-export stats request. Returns request_id or None."""
+    payload = {
+        "days_ago_start": DAYS_BACK,
+        "days_ago_end":   0,
+        "target_id":      str(target_id),
+        "target_type":    "callcenter",
+        "stat_type":      "calls",
+        "export_type":    "records",
+        "is_today":       False,
+        "timezone":       "America/Chicago",
+        "coaching_group": False,
+    }
+    r = _request_with_retry("POST", f"{BASE}/stats",
+                             headers={**H, "Content-Type": "application/json"},
+                             json=payload)
+    if r is None or r.status_code != 200:
+        snippet = (r.text[:200] if r is not None else "") .replace("\n", " ")
+        print(f"    ! stats POST {getattr(r,'status_code','?')}: {snippet}", flush=True)
+        return None
+    return r.json().get("request_id")
+
+
+def poll_for_url(request_id, max_wait_s=300):
+    """Poll until status=='complete' and download_url is present, or timeout."""
+    for _ in range(max_wait_s // 2):
+        time.sleep(2)
+        r = _request_with_retry("GET", f"{BASE}/stats/{request_id}", headers=H)
+        if r is None or r.status_code != 200:
+            continue
+        body = r.json()
+        status = body.get("status")
+        if status == "complete" and body.get("download_url"):
+            return body["download_url"]
+        if status in ("failed", "error"):
+            print(f"    ! stats job {request_id} failed: {body}", flush=True)
+            return None
+    print(f"    ! stats job {request_id} timed out", flush=True)
+    return None
+
+
+def download_csv(url):
+    r = _request_with_retry("GET", url, headers=H, timeout=120)
+    return r.text if r else ""
+
+
 def normalize_number(n):
-    """Strip non-digits, keep last 10 digits (US-centric)."""
+    """Strip non-digits, keep last 10 (US-centric phone normalization)."""
     if not n: return None
-    digits = "".join(c for c in str(n) if c.isdigit())
+    digits = re.sub(r"\D", "", str(n))
     return digits[-10:] if len(digits) >= 10 else (digits or None)
 
 
-# (center_name, iso_year, iso_week) -> set of external numbers
+def to_market(name):
+    n = (name or "").lower()
+    if "*dallas" in n:                       return "Dallas"
+    if "*houston" in n:                      return "Houston"
+    if "*san antonio" in n:                  return "San Antonio"
+    if "*austin" in n:                       return "Austin"
+    if "*phoenix" in n:                      return "Phoenix"
+    if "*utah" in n:                         return "Utah"
+    if "*tucson" in n:                       return "Tucson"
+    if "scheduling office - spanish" in n:   return "Scheduling (Spanish)"
+    return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+print(f"Fetching contact centers…", flush=True)
+centers = list_callcenters()
+print(f"  → {len(centers)} centers", flush=True)
+print(f"\nWindow: {YEAR_START} → {YEAR_END} ({DAYS_BACK} days)\n", flush=True)
+
+# (center_name, iy, iw) → set of external numbers (normalized)
 unique_callers = defaultdict(set)
-total_calls_seen = 0
+total_inbound = 0
+total_scanned = 0
 
 for c in centers:
     cid = c.get("id")
     name = c.get("name") or f"Center {cid}"
     if not cid: continue
-    print(f"  → {name}…", flush=True, end=" ")
-    n_calls = 0
-    cursor = None
-    while True:
-        params = {
-            "target_id":      cid,
-            "target_type":    "callcenter",
-            "started_after":  YEAR_START_MS,
-            "started_before": NOW_MS,
-            "limit": 200,
-        }
-        if cursor: params["cursor"] = cursor
-        r = _request_with_retry("GET", f"{BASE}/calls", headers=H, params=params)
-        if r.status_code != 200:
-            print(f"\n    ! /calls {r.status_code}: {r.text[:200]}", flush=True)
-            break
-        body = r.json()
-        items = body.get("items", [])
-        for call in items:
-            n_calls += 1
-            # Inbound only — direction may be "inbound", "outbound", "internal"
-            direction = (call.get("direction") or "").lower()
-            if direction != "inbound":
-                continue
-            # External (customer-side) phone number
-            ext = call.get("external_number") or call.get("from") or call.get("caller_number")
-            num = normalize_number(ext)
-            if not num: continue
-            # Timestamp -> ISO week
-            ts = call.get("date_started") or call.get("started_at")
-            if not ts: continue
-            try:
-                if isinstance(ts, (int, float)) or (isinstance(ts, str) and ts.isdigit()):
-                    dt = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc)
-                else:
-                    dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-            except Exception:
-                continue
-            iy, iw, _ = dt.isocalendar()
-            unique_callers[(name, iy, iw)].add(num)
-        cursor = body.get("cursor")
-        if not cursor: break
-    total_calls_seen += n_calls
+
+    rid = request_records_export(cid)
+    if not rid:
+        print(f"  ✗ {name}: stats request rejected", flush=True)
+        continue
+    url = poll_for_url(rid)
+    if not url:
+        print(f"  ✗ {name}: poll failed/timeout", flush=True)
+        continue
+    csv_text = download_csv(url)
+    if not csv_text:
+        print(f"  ✗ {name}: empty CSV", flush=True)
+        continue
+
+    # Records CSV has no "sep=" preamble; just plain CSV
+    reader = csv.DictReader(io.StringIO(csv_text))
+    n_scanned = n_inbound = 0
+    for row in reader:
+        n_scanned += 1
+        if (row.get("direction") or "").lower() != "inbound":
+            continue
+        n_inbound += 1
+        num = normalize_number(row.get("external_number"))
+        if not num: continue
+        ts = row.get("date_started") or ""
+        if not ts: continue
+        try:
+            if ts.isdigit():
+                dt = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc)
+            else:
+                # Handle e.g. "2026-04-21T13:55:12+00:00" or "2026-04-21 13:55:12"
+                ts_clean = ts.replace("Z", "+00:00")
+                try:
+                    dt = datetime.fromisoformat(ts_clean)
+                except ValueError:
+                    dt = datetime.strptime(ts[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+        iy, iw, _ = dt.isocalendar()
+        unique_callers[(name, iy, iw)].add(num)
+
     n_unique = sum(len(s) for k, s in unique_callers.items() if k[0] == name)
-    print(f"{n_calls} calls, {n_unique} unique inbound callers", flush=True)
+    print(f"  ✓ {name}: {n_scanned} scanned, {n_inbound} inbound, {n_unique} unique callers", flush=True)
+    total_scanned += n_scanned
+    total_inbound += n_inbound
 
-print(f"\nTotal calls scanned: {total_calls_seen}", flush=True)
-print(f"Total (center × week) buckets: {len(unique_callers)}", flush=True)
+print(f"\nTOTALS: {total_scanned} calls scanned, {total_inbound} inbound, "
+      f"{len(unique_callers)} (center × week) buckets", flush=True)
 
 
-# ─── 3) Build rows ───
+# ─── Build per-center per-week rows ───
 rows = []
 for (name, iy, iw), nums in sorted(unique_callers.items()):
     rows.append({
-        "contact_center":  name,
-        "iso_year":        iy,
-        "iso_week":        iw,
-        "unique_callers":  len(nums),
+        "contact_center": name,
+        "iso_year":       iy,
+        "iso_week":       iw,
+        "unique_callers": len(nums),
     })
 
 
-# ─── 4) Write to sheet ───
+# ─── Write to sheet ───
+print(f"\nConnecting to sheet {SHEET_ID[:12]}…", flush=True)
 sa = Credentials.from_service_account_info(
     json.loads(os.environ["GOOGLE_SA_JSON"]),
     scopes=["https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive"],
 )
 sh = gspread.authorize(sa).open_by_key(SHEET_ID)
-print(f"\nConnected to sheet: '{sh.title}'", flush=True)
+print(f"  ✓ '{sh.title}'", flush=True)
 
 # Raw tab
 tab = "unique_callers_raw"
@@ -165,28 +241,16 @@ try:
 except gspread.WorksheetNotFound:
     ws = sh.add_worksheet(title=tab, rows=max(len(rows) + 10, 100), cols=6)
 if rows:
-    data = [list(rows[0].keys())] + [[r.get(h, "") for h in rows[0].keys()] for r in rows]
+    headers = list(rows[0].keys())
+    data = [headers] + [[r[h] for h in headers] for r in rows]
     ws.update(data, value_input_option="RAW")
     print(f"  ✓ wrote {len(rows)} rows to '{tab}'", flush=True)
 else:
-    ws.update([["contact_center","iso_year","iso_week","unique_callers"],
-               ["(no inbound calls returned)","","",""]], value_input_option="RAW")
+    ws.update([["contact_center", "iso_year", "iso_week", "unique_callers"],
+               ["(no inbound calls found)", "", "", ""]], value_input_option="RAW")
 
 
-# ─── 5) Market pivot ───
-def to_market(n):
-    n = n.lower()
-    if '*dallas' in n: return 'Dallas'
-    if '*houston' in n: return 'Houston'
-    if '*san antonio' in n: return 'San Antonio'
-    if '*austin' in n: return 'Austin'
-    if '*phoenix' in n: return 'Phoenix'
-    if '*utah' in n: return 'Utah'
-    if '*tucson' in n: return 'Tucson'
-    if 'scheduling office - spanish' in n: return 'Scheduling (Spanish)'
-    return None
-
-# Important: dedupe at the MARKET level (a caller calling Dallas A AND Dallas B = 1 unique)
+# ─── Market pivot (dedupe at market level) ───
 market_week_nums = defaultdict(set)
 for (name, iy, iw), nums in unique_callers.items():
     m = to_market(name)
@@ -195,33 +259,32 @@ for (name, iy, iw), nums in unique_callers.items():
 
 if market_week_nums:
     weeks = sorted({w for _, w in market_week_nums})
-    ORDER = ['Dallas','Houston','Phoenix','Utah','San Antonio','Austin','Tucson','Scheduling (Spanish)']
+    ORDER = ["Dallas","Houston","Phoenix","Utah","San Antonio","Austin","Tucson","Scheduling (Spanish)"]
     markets = [m for m in ORDER if any((m, w) in market_week_nums for w in weeks)]
-    header = ["Market"] + [f"W{w}" for w in weeks] + ["Total"]
+    header = ["Market"] + [f"W{w}" for w in weeks] + ["Total (unique across all weeks)"]
     out_rows = [header]
     col_tot = {w: 0 for w in weeks}
+    all_nums = set()
     for m in markets:
-        row = [m]; mtotal = 0
-        # For "Total" column, dedupe across ALL weeks for this market
-        all_nums_for_market = set()
+        row = [m]
+        market_all_nums = set()
         for w in weeks:
             n = len(market_week_nums.get((m, w), set()))
             row.append(n)
             col_tot[w] += n
-            all_nums_for_market.update(market_week_nums.get((m, w), set()))
-        row.append(len(all_nums_for_market))  # true unique callers across all weeks
+            market_all_nums.update(market_week_nums.get((m, w), set()))
+        row.append(len(market_all_nums))
         out_rows.append(row)
-    grand_total_nums = set()
-    for nums in market_week_nums.values(): grand_total_nums.update(nums)
-    out_rows.append(["TOTAL"] + [col_tot[w] for w in weeks] + [len(grand_total_nums)])
+        all_nums.update(market_all_nums)
+    out_rows.append(["TOTAL"] + [col_tot[w] for w in weeks] + [len(all_nums)])
 
     tab2 = "unique_callers_by_market_week"
     try:
         ws2 = sh.worksheet(tab2); ws2.clear()
     except gspread.WorksheetNotFound:
-        ws2 = sh.add_worksheet(title=tab2, rows=len(out_rows)+5, cols=len(out_rows[0])+1)
+        ws2 = sh.add_worksheet(title=tab2, rows=len(out_rows) + 5, cols=len(out_rows[0]) + 1)
     ws2.update(out_rows, value_input_option="RAW")
-    print(f"  ✓ wrote market pivot ({len(out_rows)-1} rows) to '{tab2}'", flush=True)
+    print(f"  ✓ wrote {len(out_rows) - 1} market rows to '{tab2}'", flush=True)
 
 print(f"\nSheet: https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit")
 print("Done.")
