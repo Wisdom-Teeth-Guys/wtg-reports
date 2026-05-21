@@ -204,6 +204,84 @@
   .pie-sub { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
   .pie-card canvas { max-height: 260px; }
 
+  /* ── Tooltip on table headers ─────────────────────────────────── */
+  th[data-tooltip] { position: relative; }
+  th[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(6px);
+    background: var(--gray-900);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: normal;
+    width: max-content;
+    max-width: 260px;
+    text-transform: none;
+    letter-spacing: 0;
+    text-align: left;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.12s, visibility 0.12s;
+    pointer-events: none;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  th[data-tooltip]::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-bottom-color: var(--gray-900);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.12s, visibility 0.12s;
+    pointer-events: none;
+    z-index: 100;
+  }
+  th[data-tooltip]:hover::after,
+  th[data-tooltip]:hover::before { opacity: 1; visibility: visible; }
+
+  /* ── Daily-table closed/effective badges + drill-down ──────────── */
+  .daily-row.has-drilldown { cursor: pointer; }
+  .daily-row.has-drilldown:hover td { background: var(--blue-light); }
+  .daily-row .caret { display: inline-block; font-size: 10px; color: var(--gray-500); transition: transform 0.15s; }
+  .daily-row.open .caret { transform: rotate(90deg); color: var(--blue); }
+  .badge-closed {
+    display: inline-block;
+    background: var(--red-light); color: var(--red);
+    font-weight: 700; font-size: 12px;
+    padding: 2px 8px; border-radius: 12px;
+  }
+  .drilldown td { padding: 12px 24px; }
+  .drilldown-table { width: 100%; font-size: 12px; }
+  .drilldown-table th, .drilldown-table td {
+    padding: 5px 10px; text-align: left;
+    border-bottom: 1px solid var(--gray-200);
+  }
+  .drilldown-table th { background: white; font-size: 10px; text-transform: uppercase; }
+  .drilldown-table tr.closed-row td { background: var(--red-light); }
+  .outcome-pill {
+    display: inline-block;
+    padding: 2px 8px; border-radius: 12px;
+    font-size: 11px; font-weight: 600; text-transform: capitalize;
+  }
+  .outcome-contacted_dm       { background: #c6f6d5; color: #1a8a4f; }
+  .outcome-contacted_front_desk { background: #c6f6d5; color: #1a8a4f; }
+  .outcome-appt_scheduled     { background: #bee3f8; color: #2c5282; }
+  .outcome-left_materials     { background: #faf089; color: #744210; }
+  .outcome-closed_retry       { background: #fed7aa; color: #9c4221; }
+  .outcome-closed_permanent   { background: #fecaca; color: #9b2c2c; }
+  .outcome-appt_only          { background: #e2e8f0; color: #4a5568; }
+  .outcome-_unmapped          { background: #e2e8f0; color: #4a5568; }
+
   /* ── Callout cards (slipping, churned) ────────────────────────── */
   .callout {
     background: white;
@@ -436,32 +514,36 @@
   <section>
     <div class="section-title">
       Daily Activity — MTD
-      <span class="section-sub">rows highlighted red if &lt; 25 visits or &lt; 6h TVT</span>
+      <span class="section-sub">click a row to see the individual SPOTIO visits · red row = &lt; 25 visits or &lt; 6h TVT</span>
     </div>
     <div class="card">
       <div class="table-wrap">
-        <table>
+        <table id="dailyTable">
           <thead>
             <tr>
-              <th data-type="str">Day</th>
-              <th data-type="str">Date</th>
-              <th data-type="str">Type</th>
-              <th data-type="num">Visits</th>
-              <th data-type="str">First Visit</th>
-              <th data-type="str">Last Visit</th>
-              <th data-type="num">TVT (h)</th>
-              <th data-type="num">AVT (h)</th>
-              <th data-type="num">Gap (h)</th>
-              <th data-type="num">Unverified %</th>
+              <th data-type="str" data-tooltip="Day of the week. Click a row to expand the SPOTIO visit drill-down for that day.">Day</th>
+              <th data-type="str" data-tooltip="Date of the day's activity (month and day).">Date</th>
+              <th data-type="str" data-tooltip="Full (1.0) = full work day. Partial values (e.g. 0.5) reflect half-day PTO.">Type</th>
+              <th data-type="num" data-tooltip="Total visits logged in SPOTIO this day (Activity Type = Visit). Target ≥ 25 visits/day.">Visits</th>
+              <th data-type="num" data-tooltip="Visits to offices that were closed at the time — both 'closed/retry' and 'permanently closed' outcomes. These weren't productive opportunities.">Closed</th>
+              <th data-type="num" data-tooltip="Effective visits = Visits − Closed. The number of visits where the office was actually open and she had a real chance to make contact.">Effective</th>
+              <th data-type="str" data-tooltip="Time of her first visit logged this day.">First Visit</th>
+              <th data-type="str" data-tooltip="Time of her last visit logged this day.">Last Visit</th>
+              <th data-type="num" data-tooltip="Total Visit Time: the span from first visit to last visit. Target ≥ 6.0h. Measures how long she was in the field.">TVT (h)</th>
+              <th data-type="num" data-tooltip="Active Visit Time: TVT minus the sum of all gaps ≥ 45 min between consecutive visits. The 'working' portion of her day.">AVT (h)</th>
+              <th data-type="num" data-tooltip="Sum of all gaps ≥ 45 min between consecutive visits. Long breaks, lunches, travel time between zones.">Gap (h)</th>
+              <th data-type="num" data-tooltip="Percentage of visits logged from more than 300 ft from the lead's address (GPS-unverified). Target < 10%. High values may mean she's logging visits remotely or has lead-address data issues.">Unverified %</th>
             </tr>
           </thead>
           <tbody>
             
-            <tr class="">
-              <td>Mon</td>
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_1">
+              <td>Mon <span class="caret">▸</span></td>
               <td>Apr 27</td>
               <td>Full (1.0)</td>
               <td>25</td>
+              <td class="closed-cell"><span class="badge-closed">5</span></td>
+              <td class="effective-cell">9</td>
               <td>8:19 AM</td>
               <td>2:35 PM</td>
               <td>6.26</td>
@@ -470,11 +552,133 @@
               <td>4.0%</td>
             </tr>
             
-            <tr class="">
-              <td>Tue</td>
+            <tr class="drilldown" id="dd_1" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  14 SPOTIO visits attributed to her on Apr 27
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="">
+                      <td>10:02 AM</td>
+                      <td>Roddy, William C DDS</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>10:27 AM</td>
+                      <td>Rosedale dental </td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>10:51 AM</td>
+                      <td>David Tillman DDS</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>11:21 AM</td>
+                      <td>Ruddock, Dwight DDS</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:41 AM</td>
+                      <td>Diana H Raulston DDS</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:56 AM</td>
+                      <td>Brident Dental & Orthodontics</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:11 PM</td>
+                      <td>8th Avenue Dental</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:49 PM</td>
+                      <td>Spear, Brent A DDS</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>2:01 PM</td>
+                      <td>Hinkle, Curt DDS</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:10 PM</td>
+                      <td>Dental Associates of Fort Worth</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:24 PM</td>
+                      <td>Granbury Road Dental Care</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:35 PM</td>
+                      <td>Westcliff Family Dentistry</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>8:19 AM</td>
+                      <td>Cockerell Jr Dentistry</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>8:24 AM</td>
+                      <td>Fort Worth Dentist</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_2">
+              <td>Tue <span class="caret">▸</span></td>
               <td>Apr 28</td>
               <td>Full (1.0)</td>
               <td>28</td>
+              <td class="closed-cell"><span class="badge-closed">4</span></td>
+              <td class="effective-cell">2</td>
               <td>7:51 AM</td>
               <td>2:09 PM</td>
               <td>6.30</td>
@@ -483,11 +687,77 @@
               <td>3.6%</td>
             </tr>
             
-            <tr class="">
-              <td>Wed</td>
+            <tr class="drilldown" id="dd_2" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  6 SPOTIO visits attributed to her on Apr 28
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="">
+                      <td>10:22 AM</td>
+                      <td>Pine Cove Dental </td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>12:52 PM</td>
+                      <td>Swapp  Orthodontics</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>1:34 PM</td>
+                      <td>Mansfield Smiles Dentistry and Orthodontics</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:45 PM</td>
+                      <td>360 Dental Lounge</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>2:02 PM</td>
+                      <td>Lowes Farm Dental Care</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>8:08 AM</td>
+                      <td>Kidzania Pediatric Dentistry </td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_3">
+              <td>Wed <span class="caret">▸</span></td>
               <td>Apr 29</td>
               <td>Full (1.0)</td>
               <td>28</td>
+              <td class="closed-cell"><span class="badge-closed">9</span></td>
+              <td class="effective-cell">11</td>
               <td>8:36 AM</td>
               <td>3:16 PM</td>
               <td>6.67</td>
@@ -496,11 +766,175 @@
               <td>3.6%</td>
             </tr>
             
-            <tr class="">
-              <td>Thu</td>
+            <tr class="drilldown" id="dd_3" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  20 SPOTIO visits attributed to her on Apr 29
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="">
+                      <td>10:30 AM</td>
+                      <td>White Gary L DDS</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:11 AM</td>
+                      <td>Fort Worth Gentle Dental</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>11:23 AM</td>
+                      <td>Smile Team Pediatric Dentistry</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>11:38 AM</td>
+                      <td>North Texas Smiles pediatric dentistry</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>12:20 PM</td>
+                      <td>Dr. Charles McCluer DDS Dentist</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>12:51 PM</td>
+                      <td>Davis Smile Design</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>1:12 PM</td>
+                      <td>Hulen Dentistry & Implants - Gary R Granger DDS</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:23 PM</td>
+                      <td>Ahava Orthodontics</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>1:35 PM</td>
+                      <td>Bender Dental</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>1:57 PM</td>
+                      <td>Drennan Family Dentistry</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:09 PM</td>
+                      <td>William Ralstin DDS</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:22 PM</td>
+                      <td>Smile Makers</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:43 PM</td>
+                      <td>BLVD Dentistry & Orthodontics - Hulen</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:57 PM</td>
+                      <td>Essential Endodontics </td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>3:08 PM</td>
+                      <td>Periodontal Associates of Fort Worth</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>3:16 PM</td>
+                      <td>Fort Worth Family and Implant Dentistry</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>9:00 AM</td>
+                      <td>Hollywood Dental And Orthodontics </td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>9:06 AM</td>
+                      <td>Alan M Gross D.D.S</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:40 AM</td>
+                      <td>Chris Sorokolittopher Orthodontics </td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:57 AM</td>
+                      <td>Fort Worth Periodontal Specialists. </td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_4">
+              <td>Thu <span class="caret">▸</span></td>
               <td>Apr 30</td>
               <td>Full (1.0)</td>
               <td>25</td>
+              <td class="closed-cell"><span class="badge-closed">6</span></td>
+              <td class="effective-cell">10</td>
               <td>7:48 AM</td>
               <td>2:02 PM</td>
               <td>6.24</td>
@@ -509,11 +943,147 @@
               <td>0.0%</td>
             </tr>
             
-            <tr class="">
-              <td>Fri</td>
+            <tr class="drilldown" id="dd_4" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  16 SPOTIO visits attributed to her on Apr 30
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="">
+                      <td>10:31 AM</td>
+                      <td>Trinity Pediatric Dentistry</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>10:45 AM</td>
+                      <td>Mikulencak Orthodontics</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>11:00 AM</td>
+                      <td>ARCHPOINT Implant Dentistry</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:08 AM</td>
+                      <td>Advanced Dentistry - Dr. David Sorokolit</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>11:21 AM</td>
+                      <td>Lindsey Minor DDS</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>1:14 PM</td>
+                      <td>Corbitt, Renee DDS</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>2:02 PM</td>
+                      <td>Seminary Dental Clinic</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>7:48 AM</td>
+                      <td>David J Greer DDS PLLC</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>8:00 AM</td>
+                      <td>Fort Worth Children’s Dentistry</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>8:11 AM</td>
+                      <td>Dr Kevin M Altieri Dds</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>8:19 AM</td>
+                      <td>Fort Dental</td>
+                      <td>Left Treats/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>8:39 AM</td>
+                      <td>West Fort Worth Endodontics</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>8:50 AM</td>
+                      <td>Barron Dentistry</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:07 AM</td>
+                      <td>Harris, John C DDS</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:34 AM</td>
+                      <td>Legacy Pediactric And Adolecent Dentistry</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:55 AM</td>
+                      <td>Perkins Orthodontics</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_5">
+              <td>Fri <span class="caret">▸</span></td>
               <td>May 1</td>
               <td>Full (1.0)</td>
               <td>25</td>
+              <td class="closed-cell"><span class="badge-closed">6</span></td>
+              <td class="effective-cell">3</td>
               <td>7:40 AM</td>
               <td>2:20 PM</td>
               <td>6.67</td>
@@ -522,11 +1092,98 @@
               <td>4.0%</td>
             </tr>
             
-            <tr class="">
-              <td>Mon</td>
+            <tr class="drilldown" id="dd_5" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  9 SPOTIO visits attributed to her on May 1
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="closed-row">
+                      <td>10:14 AM</td>
+                      <td>Meason Orthodontics</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>12:00 PM</td>
+                      <td>Mark A McAdams, D.D.S - Willow Park</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>12:25 PM</td>
+                      <td>Garron K. Belnap, DDS</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>12:48 PM</td>
+                      <td>Millar Dentistry - Greg Millar DDS</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:19 PM</td>
+                      <td>Care Dental</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>2:03 PM</td>
+                      <td>Dickerson Restorative Family Dentistry </td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>2:20 PM</td>
+                      <td>Paul H Duesterheft D.D.S.</td>
+                      <td>Not Dental Office</td>
+                      <td><span class="outcome-pill outcome-closed_permanent">closed permanent</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>8:04 AM</td>
+                      <td>Robert C. Stroud DDS / Michael L. Ball DDS</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:05 AM</td>
+                      <td>W Dental</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_6">
+              <td>Mon <span class="caret">▸</span></td>
               <td>May 4</td>
               <td>Full (1.0)</td>
               <td>25</td>
+              <td class="closed-cell"><span class="badge-closed">6</span></td>
+              <td class="effective-cell">14</td>
               <td>8:27 AM</td>
               <td>3:03 PM</td>
               <td>6.60</td>
@@ -535,11 +1192,175 @@
               <td>0.0%</td>
             </tr>
             
-            <tr class="">
-              <td>Tue</td>
+            <tr class="drilldown" id="dd_6" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  20 SPOTIO visits attributed to her on May 4
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="">
+                      <td>10:09 AM</td>
+                      <td>Macalik, Alana K DDS</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>10:27 AM</td>
+                      <td>Brian L Britton Inc</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>10:45 AM</td>
+                      <td>Green Oaks Family Dentistry </td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>10:55 AM</td>
+                      <td>Cloin, Marty DDS</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>11:06 AM</td>
+                      <td>Sridevi Alaparti Pllc</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:23 AM</td>
+                      <td>Healing Wings Dental</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>11:33 AM</td>
+                      <td>Monarch Dental & Orthodontics</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>11:53 AM</td>
+                      <td>Fun Dentist Pediatric Dentistry </td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>12:03 PM</td>
+                      <td>Dr. Robby Seim and Dr. Ken Wallace</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>12:14 PM</td>
+                      <td>Foundation Dental Solutions</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>12:31 PM</td>
+                      <td>Mint Dentistry - Arlington </td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>12:39 PM</td>
+                      <td>I-20 Family Dental</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>12:52 PM</td>
+                      <td>Apple Dentistry </td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:03 PM</td>
+                      <td>Star Dental Group</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:20 PM</td>
+                      <td>Arlington Modern Dentistry</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:31 PM</td>
+                      <td>Affordable Dentures & Implants</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>1:46 PM</td>
+                      <td>Mint Dentistry - Fort Worth</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:31 PM</td>
+                      <td>Smile Now Dental</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>3:03 PM</td>
+                      <td>Cook childrens medical And Dental </td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>8:51 AM</td>
+                      <td>Marina Dental - Fort Worth</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_7">
+              <td>Tue <span class="caret">▸</span></td>
               <td>May 5</td>
               <td>Full (1.0)</td>
               <td>29</td>
+              <td class="closed-cell"><span class="badge-closed">3</span></td>
+              <td class="effective-cell">11</td>
               <td>8:15 AM</td>
               <td>3:06 PM</td>
               <td>6.86</td>
@@ -548,11 +1369,133 @@
               <td>3.4%</td>
             </tr>
             
-            <tr class="">
-              <td>Wed</td>
+            <tr class="drilldown" id="dd_7" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  14 SPOTIO visits attributed to her on May 5
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="">
+                      <td>11:14 AM</td>
+                      <td>Perla Dental Of Arlington</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:32 AM</td>
+                      <td>Park Row Dental</td>
+                      <td>Left Treats/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:53 AM</td>
+                      <td>Abram Dental & Ortho</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>12:59 PM</td>
+                      <td>Annie C. Wilson Prosthodontics</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:20 PM</td>
+                      <td>Stephen Ratcliff Family & Cosmetic Dentistry</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:31 PM</td>
+                      <td>Type A Dentistry - Sarah Esmail, DDS</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>1:45 PM</td>
+                      <td>Chia-Ming Lee ( Prosthodontics)</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:55 PM</td>
+                      <td>Hank Jacobs H DDS</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:04 PM</td>
+                      <td>Facial & Oral Surgery Associates</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:16 PM</td>
+                      <td>Arlington Bright Smiles</td>
+                      <td>Left Treats/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>8:41 AM</td>
+                      <td>Archie Dental</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:07 AM</td>
+                      <td>Ensenada Dental </td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:28 AM</td>
+                      <td>West Park Row Dental</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:58 AM</td>
+                      <td>Smiley Dental & Orthodontics</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_8">
+              <td>Wed <span class="caret">▸</span></td>
               <td>May 6</td>
               <td>Full (1.0)</td>
               <td>31</td>
+              <td class="closed-cell"><span class="badge-closed">8</span></td>
+              <td class="effective-cell">8</td>
               <td>8:02 AM</td>
               <td>2:40 PM</td>
               <td>6.64</td>
@@ -561,11 +1504,147 @@
               <td>6.5%</td>
             </tr>
             
-            <tr class="">
-              <td>Thu</td>
+            <tr class="drilldown" id="dd_8" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  16 SPOTIO visits attributed to her on May 6
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="closed-row">
+                      <td>10:05 AM</td>
+                      <td>Park Place Pediatric Dentistry & Orthodontics</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>10:26 AM</td>
+                      <td>Trey Brown - Endodontics</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>10:47 AM</td>
+                      <td>Collins St Dental</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:13 AM</td>
+                      <td>Happy Smiles</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:23 AM</td>
+                      <td>Smiles of Arlington - Angelie Zamora DDS</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>12:04 PM</td>
+                      <td>Miller Dental - Arlington</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>12:49 PM</td>
+                      <td>Aspen Dental</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>1:03 PM</td>
+                      <td>Steven W. Thomas</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:10 PM</td>
+                      <td>Hildebrand Orthodontics</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>1:19 PM</td>
+                      <td>Jack A Wilson Inc</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>1:36 PM</td>
+                      <td>iKids Pediatric Dentistry & Orthodontics</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:10 PM</td>
+                      <td>Coats, Christopher DDS</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>8:02 AM</td>
+                      <td>Apple Dental Center</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>8:11 AM</td>
+                      <td>All Heart Dental</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>8:22 AM</td>
+                      <td>10 Day Smiles-Arlington </td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:44 AM</td>
+                      <td>Ace Dental Studio</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_9">
+              <td>Thu <span class="caret">▸</span></td>
               <td>May 7</td>
               <td>Full (1.0)</td>
               <td>28</td>
+              <td class="closed-cell"><span class="badge-closed">2</span></td>
+              <td class="effective-cell">5</td>
               <td>9:35 AM</td>
               <td>4:36 PM</td>
               <td>7.00</td>
@@ -574,11 +1653,84 @@
               <td>7.1%</td>
             </tr>
             
-            <tr class="row-bad">
-              <td>Fri</td>
+            <tr class="drilldown" id="dd_9" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  7 SPOTIO visits attributed to her on May 7
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="">
+                      <td>11:16 AM</td>
+                      <td>Rodeo Dental - Forest Hill</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:36 AM</td>
+                      <td>Clinica San Miguel </td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>11:47 AM</td>
+                      <td>Smiley Dental Fort Worth</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>12:02 PM</td>
+                      <td>Jefferson Dental & Orthodontics</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:42 PM</td>
+                      <td>Siripanyo, Sommay DDS</td>
+                      <td>Spoke with Dentist/Left Cards</td>
+                      <td><span class="outcome-pill outcome-contacted_dm">contacted dm</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>2:53 PM</td>
+                      <td>Teeth To Feet</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>3:32 PM</td>
+                      <td>Smiley Dental and Orthodontics </td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row row-bad has-drilldown" data-drilldown-target="dd_10">
+              <td>Fri <span class="caret">▸</span></td>
               <td>May 8</td>
               <td>Full (1.0)</td>
               <td>24</td>
+              <td class="closed-cell"><span class="badge-closed">3</span></td>
+              <td class="effective-cell">2</td>
               <td>7:49 AM</td>
               <td>2:32 PM</td>
               <td>6.71</td>
@@ -587,11 +1739,70 @@
               <td>4.2%</td>
             </tr>
             
-            <tr class="">
-              <td>Mon</td>
+            <tr class="drilldown" id="dd_10" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  5 SPOTIO visits attributed to her on May 8
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="">
+                      <td>10:24 AM</td>
+                      <td>Sycamore Dental</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>10:38 AM</td>
+                      <td>Sycamore Smiles Pediatric Dentistry And Ortho•</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>1:35 PM</td>
+                      <td>Altamesa Dental•</td>
+                      <td>Office Closed/Left Cards</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>8:13 AM</td>
+                      <td>Mira Vista Cosmetic Dentistry</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>9:51 AM</td>
+                      <td>Lavu Dental PC</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_11">
+              <td>Mon <span class="caret">▸</span></td>
               <td>May 11</td>
               <td>Full (1.0)</td>
               <td>35</td>
+              <td class="closed-cell"><span class="badge-closed">2</span></td>
+              <td class="effective-cell">5</td>
               <td>7:55 AM</td>
               <td>3:33 PM</td>
               <td>7.64</td>
@@ -600,11 +1811,84 @@
               <td>2.9%</td>
             </tr>
             
-            <tr class="">
-              <td>Tue</td>
+            <tr class="drilldown" id="dd_11" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  7 SPOTIO visits attributed to her on May 11
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="closed-row">
+                      <td>10:50 AM</td>
+                      <td>Smile Magic- Grand Prairie</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:48 AM</td>
+                      <td>Precious Smiles</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>12:19 PM</td>
+                      <td>Henderson Orthodontics</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:55 PM</td>
+                      <td>Bryan W Bishop DDS</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>3:22 PM</td>
+                      <td>Winnie Orthodontics</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>8:33 AM</td>
+                      <td>Children's Dentistry of Arlington</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>8:53 AM</td>
+                      <td>Endodontic Associates of Arlington</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_12">
+              <td>Tue <span class="caret">▸</span></td>
               <td>May 12</td>
               <td>Full (1.0)</td>
               <td>26</td>
+              <td class="closed-cell"><span class="badge-closed">4</span></td>
+              <td class="effective-cell">3</td>
               <td>8:19 AM</td>
               <td>2:36 PM</td>
               <td>6.29</td>
@@ -613,11 +1897,84 @@
               <td>7.7%</td>
             </tr>
             
-            <tr class="">
-              <td>Wed</td>
+            <tr class="drilldown" id="dd_12" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  7 SPOTIO visits attributed to her on May 12
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="">
+                      <td>10:23 AM</td>
+                      <td>Perla of Grand Prairie•</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>11:40 AM</td>
+                      <td>Stanley D. Chambers, DDS</td>
+                      <td>Office Closed/Left Cards</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>12:53 PM</td>
+                      <td>APEX Dental & Orthodontics</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>1:19 PM</td>
+                      <td>Huynh & Assoc Inc - Arlington</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:43 PM</td>
+                      <td>Pioneer Crossing Dental Ctr</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>8:28 AM</td>
+                      <td>Dental Clinic</td>
+                      <td>Office Closed/Left Cards</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>8:36 AM</td>
+                      <td>Smiley Dental & Orthodontics</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_13">
+              <td>Wed <span class="caret">▸</span></td>
               <td>May 13</td>
               <td>Full (1.0)</td>
               <td>25</td>
+              <td class="closed-cell">—</td>
+              <td class="effective-cell">6</td>
               <td>8:58 AM</td>
               <td>4:01 PM</td>
               <td>7.05</td>
@@ -626,11 +1983,77 @@
               <td>0.0%</td>
             </tr>
             
-            <tr class="">
-              <td>Thu</td>
+            <tr class="drilldown" id="dd_13" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  6 SPOTIO visits attributed to her on May 13
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="">
+                      <td>1:29 PM</td>
+                      <td>Little Boots Pediatric Dentistry</td>
+                      <td>Spoke with Dentist/Left Cards</td>
+                      <td><span class="outcome-pill outcome-contacted_dm">contacted dm</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:06 PM</td>
+                      <td>Westview Dentistry</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:55 PM</td>
+                      <td>Harris Southwest Dental</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>3:48 PM</td>
+                      <td>Mira Vista Dental Assoc</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:35 AM</td>
+                      <td>1st Dental & Orthodontics</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:48 AM</td>
+                      <td>Cornerstone Endodontics</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_14">
+              <td>Thu <span class="caret">▸</span></td>
               <td>May 14</td>
               <td>Full (1.0)</td>
               <td>28</td>
+              <td class="closed-cell">—</td>
+              <td class="effective-cell">11</td>
               <td>7:39 AM</td>
               <td>2:17 PM</td>
               <td>6.64</td>
@@ -639,11 +2062,112 @@
               <td>14.3%</td>
             </tr>
             
-            <tr class="">
-              <td>Fri</td>
+            <tr class="drilldown" id="dd_14" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  11 SPOTIO visits attributed to her on May 14
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="">
+                      <td>10:00 AM</td>
+                      <td>General Dentistry - McLemore</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:24 AM</td>
+                      <td>My Dentist</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:51 AM</td>
+                      <td>Archstone Dental Weatherford</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>1:32 PM</td>
+                      <td>Dickerson Restorative Family Dentistry </td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>7:39 AM</td>
+                      <td>Stewart Family Orthodontics</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>7:58 AM</td>
+                      <td>Lonestar Smiles For Kids</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>8:05 AM</td>
+                      <td>Weatherford Endodontics</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>8:24 AM</td>
+                      <td>Beacon Dentistry of Weatherford</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>8:58 AM</td>
+                      <td>Wood Orthodontics</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:14 AM</td>
+                      <td>Dublin Family Dentistry</td>
+                      <td>Phone Call</td>
+                      <td><span class="outcome-pill outcome-_unmapped"> unmapped</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>9:29 AM</td>
+                      <td>LMNT Dental</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
+            <tr class="daily-row  has-drilldown" data-drilldown-target="dd_15">
+              <td>Fri <span class="caret">▸</span></td>
               <td>May 15</td>
               <td>Full (1.0)</td>
               <td>25</td>
+              <td class="closed-cell"><span class="badge-closed">4</span></td>
+              <td class="effective-cell">6</td>
               <td>7:35 AM</td>
               <td>2:01 PM</td>
               <td>6.44</td>
@@ -652,9 +2176,107 @@
               <td>16.0%</td>
             </tr>
             
+            <tr class="drilldown" id="dd_15" style="display: none;">
+              <td colspan="12" style="background: var(--gray-50); padding: 12px 24px;">
+                <div style="font-size: 11px; color: var(--gray-500); margin-bottom: 8px;">
+                  10 SPOTIO visits attributed to her on May 15
+                </div>
+                <table class="drilldown-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Office</th>
+                      <th>Result</th>
+                      <th>Outcome</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                    <tr class="">
+                      <td>10:12 AM</td>
+                      <td>Fort Worth Dental Arts</td>
+                      <td>Desk Empty/Left Cards</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:26 AM</td>
+                      <td>North Trinity Dental</td>
+                      <td>Already Have Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>11:59 AM</td>
+                      <td>Vincent Sanchez, DDS</td>
+                      <td>MISCELLANEOUS CHECK-IN</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>12:08 PM</td>
+                      <td>Balandran, Jaime DDS</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>2:01 PM</td>
+                      <td>Brident Dental & Orthodontics</td>
+                      <td>Left Cards/Full Pitch</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>7:35 AM</td>
+                      <td>Smile Restore - Fort Worth</td>
+                      <td>MISCELLANEOUS CHECK-IN</td>
+                      <td><span class="outcome-pill outcome-left_materials">left materials</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>7:45 AM</td>
+                      <td>Brident Dental - Jacksboro</td>
+                      <td>Office Not Here Anymore</td>
+                      <td><span class="outcome-pill outcome-closed_permanent">closed permanent</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>8:03 AM</td>
+                      <td>Apex Dental</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                    <tr class="">
+                      <td>8:34 AM</td>
+                      <td>Dental Access - Fort Worth</td>
+                      <td>New Office - First Visit</td>
+                      <td><span class="outcome-pill outcome-contacted_front_desk">contacted front desk</span></td>
+                    </tr>
+                    
+                    <tr class="closed-row">
+                      <td>9:17 AM</td>
+                      <td>Kitching Jr, Samuel F DDS</td>
+                      <td>Office Closed/No Cards Left</td>
+                      <td><span class="outcome-pill outcome-closed_retry">closed retry</span></td>
+                    </tr>
+                    
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            
+            
           </tbody>
         </table>
       </div>
+      
+      <div style="padding: 10px 16px; font-size: 11px; color: var(--gray-500); border-top: 1px solid var(--gray-200); font-style: italic;">
+        "Closed" and "Effective" columns come from SPOTIO activity records attributed to this rep.
+        Numbers may be lower than the "Visits" total — we're investigating the attribution gap (will be reconciled once HubSpot becomes the source).
+      </div>
+      
     </div>
   </section>
 
@@ -876,19 +2498,19 @@
         <table id="officeTable">
           <thead>
             <tr>
-              <th data-type="num">#</th>
-              <th data-type="str">Office</th>
-              <th data-type="num">Visits 12mo</th>
-              <th data-type="num">'26 YTD Refs</th>
-              <th data-type="num">'25 YTD Refs</th>
-              <th data-type="pct">Refs YoY</th>
-              <th data-type="num">'26 YTD Wins</th>
-              <th data-type="num">'25 YTD Wins</th>
-              <th data-type="pct">Wins YoY</th>
-              <th data-type="num">Refs/Visit</th>
-              <th data-type="num">Rolling 12mo</th>
-              <th data-type="str">Last Ref</th>
-              <th data-type="str">Trend</th>
+              <th data-type="num" data-tooltip="Rank by 2026 YTD referrals (highest first).">#</th>
+              <th data-type="str" data-tooltip="Office name as it appears in HubSpot.">Office</th>
+              <th data-type="num" data-tooltip="Number of SPOTIO visits this rep has made to this office in the last 12 months.">Visits 12mo</th>
+              <th data-type="num" data-tooltip="Referrals received from this office year-to-date in fiscal 2026 (Dec 28, 2025 onward).">'26 YTD Refs</th>
+              <th data-type="num" data-tooltip="Referrals from this office over the equivalent YTD window in fiscal 2025 (Dec 29, 2024 onward).">'25 YTD Refs</th>
+              <th data-type="pct" data-tooltip="Year-over-year change: 2026 YTD refs vs 2025 YTD refs over the same window.">Refs YoY</th>
+              <th data-type="num" data-tooltip="Closed-won deals from this office's referrals, YTD 2026.">'26 YTD Wins</th>
+              <th data-type="num" data-tooltip="Closed-won deals from this office's referrals over the equivalent YTD window in 2025.">'25 YTD Wins</th>
+              <th data-type="pct" data-tooltip="Year-over-year change: 2026 YTD wins vs 2025 YTD wins.">Wins YoY</th>
+              <th data-type="num" data-tooltip="Average referrals received per SPOTIO visit over the last 12 months. A measure of visit productivity — higher = each visit drives more refs.">Refs/Visit</th>
+              <th data-type="num" data-tooltip="Total referrals from this office across the trailing 12 months (rolling window, not fiscal-bounded).">Rolling 12mo</th>
+              <th data-type="str" data-tooltip="Date of the most recent referral received from this office.">Last Ref</th>
+              <th data-type="str" data-tooltip="Trend indicator comparing 2026 YTD to 2025 YTD: 📈 Up = growing, 📉 Down = declining, — = no change or insufficient data.">Trend</th>
             </tr>
           </thead>
           <tbody>
@@ -10915,7 +12537,7 @@
     </div>
   </section>
 
-  <footer>WTG Internal · access managed via Cloudflare Zero Trust · generated May 19, 2026 03:26 PM</footer>
+  <footer>WTG Internal · access managed via Cloudflare Zero Trust · generated May 19, 2026 04:55 PM</footer>
 </div>
 
 <script>
@@ -11026,6 +12648,18 @@ function attachSort(tableEl) {
   });
 }
 document.querySelectorAll('table').forEach(attachSort);
+
+// ── Daily-table drill-down expand/collapse ───────────────────────
+document.querySelectorAll('.daily-row.has-drilldown').forEach(row => {
+  row.addEventListener('click', () => {
+    const targetId = row.dataset.drilldownTarget;
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    const open = target.style.display !== 'none';
+    target.style.display = open ? 'none' : '';
+    row.classList.toggle('open', !open);
+  });
+});
 
 // ── Office table filters ──────────────────────────────────────────
 const officeSearch = document.getElementById('officeSearch');

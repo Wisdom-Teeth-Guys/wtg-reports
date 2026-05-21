@@ -22,3 +22,14 @@ marketers:
     xlsx: data/abi_nilles.xlsx
     spotio_user_id: "431657"
     spotio_territory_id: "113273"   # Houston SE
+
+  ayline_jadell:
+    name: Ayline Jadell
+    territory: Houston NE
+    drive_folder_id: 1F7MLNXD7QhHtw1KAzHXHeVmXSi4mGoyo
+    xlsx: data/ayline_jadell.xlsx
+    spotio_user_id: "838999"
+    spotio_territory_id: "113271"               # Houston NE
+    hubspot_marketer_name: Ayline Jadell        # the marketer_assigned value to filter on
+    hubspot_territory_column: Houston Northeast # column in territory_zip_map.csv
+    enable_hubspot_live: true                   # pull refs/wins from HubSpot, not xlsx
