@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# One-time setup for contributors to wtg-reports.
+#
+# Installs the pre-commit framework and wires up the local PHI scanner hook,
+# then runs the scanner once to confirm everything is in place.
+#
+# Usage: ./bin/setup
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "ERROR: python3 not found on PATH." >&2
+  exit 1
+fi
+
+echo "==> Installing pre-commit (pip --user)"
+python3 -m pip install --user --upgrade pre-commit
+
+# Make sure the user-site bin is on PATH for this session
+USER_BIN="$(python3 -m site --user-base)/bin"
+export PATH="$USER_BIN:$PATH"
+
+if ! command -v pre-commit >/dev/null 2>&1; then
+  echo "ERROR: pre-commit installed but not on PATH. Add '$USER_BIN' to your PATH." >&2
+  exit 1
+fi
+
+echo "==> Wiring pre-commit hook into .git/hooks/pre-commit"
+pre-commit install
+
+echo "==> Running phi_scan.py against current tree (sanity check)"
+python3 scripts/phi_scan.py
+
+cat <<'DONE'
+
+Setup complete.
+
+From now on, `git commit` will run the PHI / deal-data scanner on staged
+files and refuse commits that contain emails, phone numbers, SSNs, HubSpot
+CRM URLs/IDs, or raw data file types.
+
+If you ever need to re-run the scan manually:
+
+  python3 scripts/phi_scan.py            # scan everything tracked
+  python3 scripts/phi_scan.py FILE ...   # scan specific files
+
+False positives go in .phi-allowlist (one substring per line).
+DONE

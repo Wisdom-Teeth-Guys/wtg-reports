@@ -44,16 +44,33 @@ patient PII and deal-specific CRM data:
 1. **Local pre-commit hook** — `git commit` runs `scripts/phi_scan.py` and
    refuses commits that contain emails, phone numbers, SSNs, HubSpot CRM
    record URLs, HubSpot object IDs, or raw data file types (`*.csv`,
-   `*.parquet`, etc.). Install once:
+   `*.parquet`, etc.). New contributors install with one command:
    ```bash
-   pip install pre-commit
-   pre-commit install
+   ./bin/setup
    ```
+   (Equivalent to `pip install pre-commit && pre-commit install` plus a
+   sanity-check scan.)
 2. **`phi-scan` GitHub Actions workflow** — re-runs the same scan on every
    push. Catches commits that bypassed the local hook with `--no-verify`.
 3. **`sync.yml` gate** — the deploy workflow runs the scan as its first step,
    so a leak aborts the Cloudflare deploy before any files reach the live
    site.
+4. **Branch ruleset on `main`** — direct pushes to `main` are rejected by
+   GitHub. All changes go through a PR; the `scan` status check must pass
+   before merge. Configured under **Settings → Rules → Rulesets**
+   (`main-phi-scan-required`).
+
+### Contributing a change
+
+```bash
+git checkout -b add-something-descriptive
+# ... edit files ...
+git add ...
+git commit -m "..."       # pre-commit runs phi_scan locally
+git push -u origin add-something-descriptive
+gh pr create --fill        # phi-scan workflow runs, must pass
+gh pr merge --squash       # only succeeds once scan is green
+```
 
 ### When the scanner flags something
 
