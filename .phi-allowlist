@@ -1,0 +1,9 @@
+# PHI scanner allowlist — substrings here are treated as safe matches.
+# One substring per line. Comments start with '#'.
+# Add only after reviewing the flagged match and confirming it is NOT a leak.
+
+# Repo owner's own email, appearing in internal status docs.
+Court@wisdomteethguys.com
+
+# RFC 2606 reserved-for-docs domain. Safe in README examples.
+@example.com

@@ -5,3 +5,15 @@ __pycache__/
 .DS_Store
 service-account-*.json
 .spotio_token_cache.json
+
+# Raw data — never commit to this repo. Use the working dir.
+*.csv
+*.tsv
+*.parquet
+*.xlsx
+*.xls
+*.sqlite
+*.sqlite3
+marketer_reports/cache/
+marketer_reports/data/
+marketer_reports/scripts/audit/

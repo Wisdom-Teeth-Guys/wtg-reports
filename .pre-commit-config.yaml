@@ -1,0 +1,14 @@
+# Run `pre-commit install` once to wire this into `git commit`.
+# See README for handling flagged findings.
+repos:
+  - repo: local
+    hooks:
+      - id: phi-scan
+        name: PHI / deal-data scanner
+        description: Block commits containing emails, phones, SSNs, HubSpot CRM IDs, or raw data dumps.
+        entry: python3 scripts/phi_scan.py
+        language: system
+        pass_filenames: true
+        # Scan everything that could plausibly contain PHI. Binary types are
+        # filtered inside the scanner.
+        types_or: [text]

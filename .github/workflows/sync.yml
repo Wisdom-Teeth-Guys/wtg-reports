@@ -21,6 +21,11 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
 
+      # Gate the deploy on the PHI scanner. Anything flagged here aborts the
+      # workflow before the sync/build/deploy steps run.
+      - name: PHI / deal-data scan
+        run: python3 scripts/phi_scan.py
+
       - name: Sync HubSpot → Google Sheets
         env:
           HUBSPOT_TOKEN:   ${{ secrets.HUBSPOT_TOKEN }}

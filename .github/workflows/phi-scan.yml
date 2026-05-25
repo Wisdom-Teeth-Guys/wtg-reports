@@ -1,0 +1,21 @@
+name: PHI / deal-data scan
+
+# Independent safety net. Runs on every push so that even if the local
+# pre-commit hook is bypassed (e.g. `git commit --no-verify`), a leak gets
+# caught before the sync.yml deploy workflow is invoked.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run phi_scan.py
+        run: python3 scripts/phi_scan.py
