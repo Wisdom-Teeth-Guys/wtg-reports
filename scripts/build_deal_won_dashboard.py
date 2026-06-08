@@ -152,8 +152,11 @@ def _norm_zip(v):
 
 df['Zip'] = df['company_zip_lookup'].apply(_norm_zip).fillna(df['deal_zip'].apply(_norm_zip))
 
+# Territory = fine-grained sub-area only ("Dallas NE", "Dallas SW", "Houston Central").
+# Per Court 2026-05-26: Territory is the SUB-area within a market — never the bare
+# market name. Market-level filtering happens via the Pipeline dropdown (the
+# primary, CRM-aligned filter). Deals without a fine territory → "Unassigned".
 df['Territory'] = df['company_territory_lookup'].fillna('').astype(str).str.strip()
-df.loc[df['Territory'] == '', 'Territory'] = df['company_market_lookup'].fillna('').astype(str).str.strip()
 df.loc[df['Territory'] == '', 'Territory'] = 'Unassigned'
 
 print(f"Loaded {len(df)} won-deals")
@@ -229,6 +232,25 @@ wins_ytd_pct = round((wins_ytd / wins_ytd_ly - 1)*100, 1) if wins_ytd_ly else 0
 print(f"Won KPIs: this_week={wins_this_week}, last_week={wins_last_week}, "
       f"90d={wins_last_90} vs {wins_prev_90} ({wins_90_pct:+}%), "
       f"YTD={wins_ytd} vs LY {wins_ytd_ly} ({wins_ytd_pct:+}%)")
+
+# ── Per-pipeline KPI breakdowns ──────────────────────────────────────────────
+# Pipeline is the primary filter (CRM-aligned). When the user picks a pipeline,
+# all four KPI cards must reflect that pipeline only.
+kpi_by_pipeline = {}
+for _pipe, _g in df_won.groupby('Pipeline'):
+    if not _pipe: continue
+    _g_dates_iso = _g['Date'].dt.isocalendar()
+    _kpi_tw = int(((_g_dates_iso.year == _cur_iso_year) & (_g_dates_iso.week == _cur_iso_week)).sum())
+    _kpi_lw = int(((_g_dates_iso.year == _last_iso_year) & (_g_dates_iso.week == _last_iso_week)).sum())
+    _kpi_l90 = int(((_g['Date'] > _90)  & (_g['Date'] <= _today)).sum())
+    _kpi_p90 = int(((_g['Date'] > _180) & (_g['Date'] <= _90)).sum())
+    _kpi_ytd = int(((_g['Date'] >= _ytd_start) & (_g['Date'] <= _today)).sum())
+    _kpi_ytd_ly = int(((_g['Date'] >= _ytd_ly_start) & (_g['Date'] <= _ytd_ly_end)).sum())
+    kpi_by_pipeline[_pipe] = {
+        'thisWeek': _kpi_tw, 'lastWeek': _kpi_lw,
+        'last90': _kpi_l90, 'prev90': _kpi_p90,
+        'ytd': _kpi_ytd, 'ytdLY': _kpi_ytd_ly,
+    }
 
 # ── Per-account data ─────────────────────────────────────────────────────────
 print("Computing per-account metrics…")
@@ -415,14 +437,17 @@ for w in ZOOM_WEEKS:
     zoom_deals_2026.append(int(len(df_won[(df_won['ISOYear']==2026)&(df_won['ISOWeek']==w)])))
     zoom_deals_2025.append(int(len(df_won[(df_won['ISOYear']==2025)&(df_won['ISOWeek']==w)])))
 
+# Key includes Pipeline so the Pipeline filter (the primary CRM-aligned filter
+# per Court 2026-05-26) actually slices the won-by-week zoom chart.
 zoom_vol_by_rep = {}
-for (mk, terr, mkt), _ in df.groupby(['Marketer','Territory','Market']):
-    rep = df_won[(df_won['Marketer']==mk)&(df_won['Territory']==terr)&(df_won['Market']==mkt)]
+for (pipe, mk, terr, mkt), _ in df.groupby(['Pipeline','Marketer','Territory','Market']):
+    rep = df_won[(df_won['Pipeline']==pipe)&(df_won['Marketer']==mk)&(df_won['Territory']==terr)&(df_won['Market']==mkt)]
     z26, z25 = [], []
     for w in ZOOM_WEEKS:
         z26.append(int(len(rep[(rep['ISOYear']==2026)&(rep['ISOWeek']==w)])))
         z25.append(int(len(rep[(rep['ISOYear']==2025)&(rep['ISOWeek']==w)])))
-    zoom_vol_by_rep[f"{mk}||{terr}||{mkt}"] = {'terr': terr, 'mkt': mkt, 'rep': mk, 'z26': z26, 'z25': z25}
+    zoom_vol_by_rep[f"{pipe}||{mk}||{terr}||{mkt}"] = {
+        'pipeline': pipe, 'terr': terr, 'mkt': mkt, 'rep': mk, 'z26': z26, 'z25': z25}
 
 _zc = sum(zoom_deals_2026[1:18]); _zp = sum(zoom_deals_2025[1:18])
 print(f"Zoom default (Wk 2-17 wins): 2026={_zc} vs 2025={_zp} ({round((_zc/_zp-1)*100) if _zp else 0}% YoY)")
@@ -513,6 +538,7 @@ payload = {
         'last90': wins_last_90, 'prev90': wins_prev_90, 'pct90': wins_90_pct,
         'ytd': wins_ytd, 'ytdLY': wins_ytd_ly, 'ytdPct': wins_ytd_pct,
     },
+    'kpiByPipeline': kpi_by_pipeline,
     'alertCounts': alert_counts,
     'tierCounts': tier_counts,
     'jfByTerr': jf_by_terr,
@@ -844,7 +870,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;fo
           <input type="number" id="zoom-end" min="1" max="53" value="17" style="width:54px;margin-left:4px;padding:2px 4px;font-size:11px">
         </label>
         <button onclick="applyZoomRange()" style="padding:3px 10px;font-size:11px;background:#0d2645;color:#fff;border:none;border-radius:3px;cursor:pointer">Apply</button>
-        <button onclick="setZoomPreset(2,17)" style="padding:3px 8px;font-size:11px;background:#e5e7eb;border:none;border-radius:3px;cursor:pointer">Wk 2-17</button>
         <button onclick="setZoomPreset(1,13)" style="padding:3px 8px;font-size:11px;background:#e5e7eb;border:none;border-radius:3px;cursor:pointer">Q1 (1-13)</button>
         <button onclick="setZoomPreset(14,26)" style="padding:3px 8px;font-size:11px;background:#e5e7eb;border:none;border-radius:3px;cursor:pointer">Q2 (14-26)</button>
         <span id="zoom-sub" style="margin-left:auto;color:#666"></span>
@@ -945,21 +970,35 @@ function trendHtml(t){
   return '<span class="trend-flat">→</span>';
 }
 
-// ── Init KPI cards (Wins) ───────────────────────────────────────────────────
-document.getElementById('kpi-this-week').textContent = fmt(DATA.kpi.thisWeek);
-document.getElementById('kpi-last-week').textContent = fmt(DATA.kpi.lastWeek);
-
-const k90 = document.getElementById('kpi-90d');
-k90.textContent = fmt(DATA.kpi.last90);
-const pct90 = DATA.kpi.pct90;
-document.getElementById('kpi-90d-sub').textContent = `vs ${fmt(DATA.kpi.prev90)} prior 90 (${pct90>=0?'+':''}${pct90.toFixed(1)}%)`;
-document.getElementById('kpi-90d-card').classList.add(pct90<0?'neg':'pos');
-
-const kytd = document.getElementById('kpi-ytd');
-kytd.textContent = fmt(DATA.kpi.ytd);
-const pctytd = DATA.kpi.ytdPct;
-document.getElementById('kpi-ytd-sub').textContent = `vs ${fmt(DATA.kpi.ytdLY)} same period LY (${pctytd>=0?'+':''}${pctytd.toFixed(1)}%)`;
-document.getElementById('kpi-ytd-card').classList.add(pctytd<0?'neg':'pos');
+// ── KPI cards (Wins) — respect the Pipeline filter ──────────────────────────
+// Pipeline is the primary filter (CRM-aligned). When user picks a pipeline,
+// KPI cards switch to that pipeline's slice. No pipeline → global totals.
+function renderKpis(pipelineKey){
+  let k;
+  if(pipelineKey && DATA.kpiByPipeline && DATA.kpiByPipeline[pipelineKey]){
+    const pk = DATA.kpiByPipeline[pipelineKey];
+    const pct90 = pk.prev90>0 ? ((pk.last90/pk.prev90 - 1)*100) : 0;
+    const pctytd = pk.ytdLY>0 ? ((pk.ytd/pk.ytdLY - 1)*100) : 0;
+    k = {thisWeek: pk.thisWeek, lastWeek: pk.lastWeek,
+         last90: pk.last90, prev90: pk.prev90, pct90,
+         ytd: pk.ytd, ytdLY: pk.ytdLY, ytdPct: pctytd};
+  } else {
+    k = DATA.kpi;
+  }
+  document.getElementById('kpi-this-week').textContent = fmt(k.thisWeek);
+  document.getElementById('kpi-last-week').textContent = fmt(k.lastWeek);
+  document.getElementById('kpi-90d').textContent = fmt(k.last90);
+  document.getElementById('kpi-90d-sub').textContent =
+    `vs ${fmt(k.prev90)} prior 90 (${k.pct90>=0?'+':''}${k.pct90.toFixed(1)}%)`;
+  const c90 = document.getElementById('kpi-90d-card');
+  c90.classList.remove('neg','pos'); c90.classList.add(k.pct90<0?'neg':'pos');
+  document.getElementById('kpi-ytd').textContent = fmt(k.ytd);
+  document.getElementById('kpi-ytd-sub').textContent =
+    `vs ${fmt(k.ytdLY)} same period LY (${k.ytdPct>=0?'+':''}${k.ytdPct.toFixed(1)}%)`;
+  const cytd = document.getElementById('kpi-ytd-card');
+  cytd.classList.remove('neg','pos'); cytd.classList.add(k.ytdPct<0?'neg':'pos');
+}
+renderKpis(null);
 
 document.getElementById('acct-count').textContent = fmt(DATA.totalAccounts)+' accounts';
 
@@ -1063,6 +1102,7 @@ function updateZoomChart(){
   for(let w=s; w<=e; w++) labels.push('Wk '+w);
   const cur = Array(n).fill(0), prev = Array(n).fill(0);
   Object.values(DATA.zoomVolByRep).forEach(v=>{
+    if(fv.pipeline && v.pipeline !== fv.pipeline) return;
     if(fv.terrs.size>0 && !fv.terrs.has(v.terr)) return;
     if(fv.reps.size>0 && !fv.reps.has(v.rep)) return;
     for(let i=0;i<n;i++){
@@ -1304,7 +1344,12 @@ function updateCharts(){
   const filtAccts = DATA.accounts.filter(a=>matchesFilter(a, fv));
   const activeAccts = filtAccts.filter(a=>a.jf26>0||a.jf25>0);
 
-  // KPI scorecards show global totals (not per-filter — would need per-week per-account data)
+  // ── KPI scorecards (Wins) ──
+  // Respect the Pipeline filter (primary, CRM-aligned). Other filters
+  // (rep, territory, alert, tier, trend) don't change KPI cards — they
+  // operate at the account/territory level, not the deal level. Pipeline
+  // does, because it slices the underlying deal set 1:1 with CRM.
+  renderKpis(fv.pipeline);
   document.getElementById('acct-count').textContent = fmt(filtAccts.length)+' accounts';
 
   // ── Territory bar: recalculate from filtered accounts ──
