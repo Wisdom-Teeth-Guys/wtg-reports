@@ -1,0 +1,28 @@
+name: Weekly Office Tier Reconcile
+
+on:
+  schedule:
+    # Mondays 02:00 UTC ≈ Sunday ~8-9 PM Central — weekly level-set of tier_current
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: tier-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Level-set tier_current from dental_referral_wins_last_90_days and clear
+      # stuck/placeholder offices. Backstops the native HubSpot tier
+      # segments+workflows (edge-triggered; can drift + can't exclude placeholders).
+      - name: Reconcile office tier_current
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+        run: python -u scripts/compute_office_tier.py --push
