@@ -44,6 +44,10 @@ LIFETIME_REFS_PROP = "dental_referrals_life_time"       # has it ever referred?
 LIFETIME_WINS_PROP = "dental_referral_wins_all_time"    # has it ever won?
 
 
+# Rank for drop detection (higher = better tier). blank/"" = -1.
+TIER_RANK = {"VIP": 5, "Tier 1": 4, "Tier 2": 3, "Tier 3": 2, "Tier 4": 1, "Zero": 0, "": -1}
+
+
 def tier_for(wins90: int, lifetime_refs: int, lifetime_wins: int) -> str:
     if wins90 >= 5: return "VIP"
     if wins90 >= 3: return "Tier 1"
@@ -90,15 +94,19 @@ def batch_update(updates):
 
 
 def main(push):
+    from datetime import date
+    today = date.today().isoformat()
     print(f"Computing tier_current from {TIER_PROP}  ({'PUSH' if push else 'DRY RUN'})\n")
     qs = (f"limit=100&properties=name&properties={TIER_PROP}"
           f"&properties={LIFETIME_REFS_PROP}&properties={LIFETIME_WINS_PROP}"
-          f"&properties=tier_current")
+          f"&properties=tier_current&properties=tier_prior_week")
     after = None
     updates = []
     dist = Counter()
     excluded = 0
     scanned = 0
+    moved_up = 0
+    moved_down = 0
     while True:
         url = f"https://api.hubapi.com/crm/v3/objects/companies?{qs}"
         if after: url += f"&after={after}"
@@ -108,6 +116,7 @@ def main(push):
             p = c.get("properties") or {}
             name = p.get("name") or ""
             cur = p.get("tier_current") or ""
+            prior = p.get("tier_prior_week") or ""     # tier at last reconcile
             def _iv(key):
                 v = p.get(key)
                 return int(float(v)) if v not in (None, "") else 0
@@ -122,8 +131,26 @@ def main(push):
                 desired = tier_for(wins, lifetime_refs, lifetime_wins)
 
             dist[desired or "(excluded)"] += 1
-            if (cur or "") != desired:
-                updates.append({"id": c["id"], "properties": {"tier_current": desired}})
+
+            props = {}
+            if cur != desired:
+                props["tier_current"] = desired
+
+            # --- tier-change detection (movement up/down since last reconcile) ---
+            # Skip placeholders, and skip the first-ever run (prior unset = baseline).
+            if not is_placeholder(name) and prior != desired:
+                props["tier_prior_week"] = desired          # advance the snapshot
+                if prior != "":                              # real change, not baseline
+                    props["tier_previous"] = prior
+                    props["tier_changed_date"] = today
+                    if TIER_RANK.get(desired, -1) > TIER_RANK.get(prior, -1):
+                        props["tier_direction"] = "Up"; moved_up += 1
+                    else:
+                        props["tier_direction"] = "Down"; moved_down += 1
+                        props["tier_dropped_date"] = today
+
+            if props:
+                updates.append({"id": c["id"], "properties": props})
         after = (d.get("paging") or {}).get("next", {}).get("after")
         if not after: break
         time.sleep(0.05)
@@ -132,7 +159,8 @@ def main(push):
     print("Target tier distribution:")
     for k in ("VIP","Tier 1","Tier 2","Tier 3","Tier 4","Zero","(excluded)"):
         print(f"  {k:<12} {dist.get(k,0):>7,}")
-    print(f"\n{len(updates):,} companies need tier_current changed.")
+    print(f"\nMovement since last reconcile:  {moved_up} up, {moved_down} down")
+    print(f"{len(updates):,} companies need an update.")
 
     if not push:
         print("\nDRY RUN — re-run with --push to write.")
