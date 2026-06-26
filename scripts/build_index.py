@@ -49,6 +49,17 @@ if MK_SRC.exists():
         })
         print(f"  ✓ marketer: {f.name}")
 
+# Copy call-center ops dashboard(s) into the deploy output
+OPS_SRC = REPO_ROOT / "ops"
+OPS_OUT = OUT_DIR / "ops"
+ops_files = []
+if OPS_SRC.exists():
+    OPS_OUT.mkdir(exist_ok=True)
+    for f in sorted(OPS_SRC.glob("*.html")):
+        shutil.copy(f, OPS_OUT / f.name)
+        ops_files.append(f.name)
+        print(f"  ✓ ops: {f.name}")
+
 UPDATED = datetime.now(timezone.utc).strftime('%B %-d, %Y at %-I:%M %p UTC')
 
 ARCHIVE_LABELS = {
@@ -129,6 +140,14 @@ footer {{ margin-top: 40px; text-align: center; color: #a0aec0; font-size: 12px;
   <a class="card live" target="_blank" rel="noopener" href="google_ads_dashboard.html">
     <h3>💰 Google Ads Dashboard</h3>
     <p>Google Ads spend by city + HubSpot deals attributed to Google Adwords PPC. Effective CPA by location.</p>
+  </a>
+</div>
+
+<div class="section-title">Call-Center Operations</div>
+<div class="grid">
+  <a class="card live" target="_blank" rel="noopener" href="ops/ops_dashboard.html">
+    <h3>📞 Call-Center Ops &amp; Staffing</h3>
+    <p>Daily answer rate, call volume, abandons, wait time, and agents-active-by-hour — by market and agent, with YoY/WoW. Built for staffing decisions.</p>
   </a>
 </div>
 
