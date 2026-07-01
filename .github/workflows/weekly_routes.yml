@@ -5,9 +5,11 @@ name: weekly_routes
 #             Runs during Sunday DAY so the HS→MMC hourly sync has all Sunday to
 #             propagate the visit_week_of + visit_<day> stamps into MMC. By Monday
 #             morning, marketers open MMC and their "Monday" saved filter is live.
-#  - audit:   Friday 5:00 PM CT  (= 22:00 UTC during CDT, 23:00 UTC during CST)
-#             Compares planned vs Spotio-visited, sets falloff_flag=true on missed orgs
-#             so the next Sunday's run boosts them.
+#  - audit:   Saturday 10:00 AM CT  (= 15:00 UTC during CDT, 16:00 UTC during CST)
+#             Runs the morning AFTER the workweek ends so late-Friday Spotio
+#             visits have had time to sync. Compares planned vs Spotio-visited,
+#             sets falloff_flag=true on missed orgs so the next Sunday's run
+#             boosts them.
 #
 # Cron is in UTC. CDT (Mar–Nov) is UTC-5; CST (Nov–Mar) is UTC-6. We schedule for the
 # CDT offset since that's most of the year; during winter the run lands an hour earlier
@@ -18,7 +20,7 @@ name: weekly_routes
 on:
   schedule:
     - cron: "0 13 * * 0"  # Sun 13:00 UTC  ≈ Sun 8am CT  → build_weekly_routes --push
-    - cron: "0 22 * * 5"  # Fri 22:00 UTC  ≈ Fri 5pm CT  → route_audit_report --apply-boost --push
+    - cron: "0 15 * * 6"  # Sat 15:00 UTC  ≈ Sat 10am CT → route_audit_report --apply-boost --push
   workflow_dispatch:
     inputs:
       job:
@@ -69,9 +71,10 @@ jobs:
       - name: Audit last week (apply-boost + push)
         if: steps.pick.outputs.job == 'audit'
         run: |
-          # last Monday = current date minus its weekday number
-          LAST_MON=$(python3 -c "import datetime;d=datetime.date.today();print(d - datetime.timedelta(days=d.weekday()))")
-          python3 -m route_builder.route_audit_report --week-of "$LAST_MON" --apply-boost --push 2>&1 | tee /tmp/audit.log
+          # Running Saturday morning; "this week's Monday" is 5 days back (weekday=5).
+          # date.weekday() returns 0=Mon..6=Sun, so subtracting it always lands on this week's Monday.
+          THIS_MON=$(python3 -c "import datetime;d=datetime.date.today();print(d - datetime.timedelta(days=d.weekday()))")
+          python3 -m route_builder.route_audit_report --week-of "$THIS_MON" --apply-boost --push 2>&1 | tee /tmp/audit.log
 
       - name: Upload run artifacts
         if: always()
