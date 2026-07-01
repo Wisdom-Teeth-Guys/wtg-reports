@@ -1,8 +1,10 @@
 name: weekly_routes
 
 # Two scheduled jobs:
-#  - build:   Sunday 7:00 PM CT  (= Monday 00:00 UTC during CDT, 01:00 UTC during CST)
-#             Stamps visit_week_of=<that Monday> on each territory's 50 cadence-overdue picks.
+#  - build:   Sunday 8:00 AM CT  (= 13:00 UTC during CDT, 14:00 UTC during CST)
+#             Runs during Sunday DAY so the HS→MMC hourly sync has all Sunday to
+#             propagate the visit_week_of + visit_<day> stamps into MMC. By Monday
+#             morning, marketers open MMC and their "Monday" saved filter is live.
 #  - audit:   Friday 5:00 PM CT  (= 22:00 UTC during CDT, 23:00 UTC during CST)
 #             Compares planned vs Spotio-visited, sets falloff_flag=true on missed orgs
 #             so the next Sunday's run boosts them.
@@ -15,7 +17,7 @@ name: weekly_routes
 
 on:
   schedule:
-    - cron: "0 0 * * 1"   # Mon 00:00 UTC  ≈ Sun 7pm CT  → build_weekly_routes --push
+    - cron: "0 13 * * 0"  # Sun 13:00 UTC  ≈ Sun 8am CT  → build_weekly_routes --push
     - cron: "0 22 * * 5"  # Fri 22:00 UTC  ≈ Fri 5pm CT  → route_audit_report --apply-boost --push
   workflow_dispatch:
     inputs:
@@ -53,7 +55,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "job=${{ inputs.job }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "0 0 * * 1" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 13 * * 0" ]; then
             echo "job=build" >> $GITHUB_OUTPUT
           else
             echo "job=audit" >> $GITHUB_OUTPUT
