@@ -55,6 +55,11 @@ HS_FIELDS = {
     # Route scoring
     "priority_score":   "visit_priority_score",
     "week_of":          "visit_week_of",
+    "day_monday":       "visit_monday",
+    "day_tuesday":      "visit_tuesday",
+    "day_wednesday":    "visit_wednesday",
+    "day_thursday":     "visit_thursday",
+    "day_friday":       "visit_friday",
     "visit_reason":     "visit_reason",
     "tier_current":     "tier_current",
     "last_visit":       "last_visit_date",
@@ -89,6 +94,13 @@ HS_FIELDS = {
 HS_FIELD_SCHEMA = [
     ("visit_priority_score",       "Visit Priority Score",     "number",      "number",          None),
     ("visit_week_of",              "Visit Week Of",            "date",        "date",            None),
+    # Per-day scheduling — one of these gets the specific date for the office's day this week.
+    # MMC saved filters ("Monday", "Tuesday" etc) filter on these fields.
+    ("visit_monday",               "Visit Monday",             "date",        "date",            None),
+    ("visit_tuesday",              "Visit Tuesday",            "date",        "date",            None),
+    ("visit_wednesday",            "Visit Wednesday",          "date",        "date",            None),
+    ("visit_thursday",             "Visit Thursday",           "date",        "date",            None),
+    ("visit_friday",               "Visit Friday",             "date",        "date",            None),
     ("visit_reason",               "Visit Reason",             "string",      "text",            None),
     ("tier_current",               "Tier Current",             "enumeration", "select",
         ["VIP", "T1", "T2", "T3", "Zero"]),

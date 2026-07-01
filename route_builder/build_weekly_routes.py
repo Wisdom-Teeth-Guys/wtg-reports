@@ -28,6 +28,7 @@ import csv
 import os
 import sys
 import time
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -413,27 +414,148 @@ def main(args) -> int:
     print(f"\n[5/5] Output: {out_dir}")
     print(f"  Total orgs selected across all territories: {len(all_selected)}")
 
+    # Assign each selected org to a Mon-Fri day-bucket (geographic + open-days aware)
+    day_assignments = assign_to_days(all_selected, week_of)
+    # Log per-territory day counts
+    per_terr_days: dict = defaultdict(lambda: {"Mon": 0, "Tue": 0, "Wed": 0, "Thu": 0, "Fri": 0})
+    for o in all_selected:
+        d = day_assignments.get(o.hs_id)
+        if d:
+            per_terr_days[o.territory][["Mon", "Tue", "Wed", "Thu", "Fri"][(d - week_of).days]] += 1
+    print(f"\nDay-of-week split per territory:")
+    for terr in sorted(per_terr_days):
+        c = per_terr_days[terr]
+        print(f"  {terr:26s}  Mon={c['Mon']}  Tue={c['Tue']}  Wed={c['Wed']}  Thu={c['Thu']}  Fri={c['Fri']}")
+
     # Push to HubSpot
     if args.push:
-        print(f"\n[PUSH] Writing visit_week_of / visit_priority_score / visit_reason to HubSpot...")
+        print(f"\n[PUSH] Writing visit_week_of + visit_monday..friday to HubSpot...")
+        # 1. Clear any leftover per-day stamps from previous week
+        cleared = _clear_stale_day_stamps(week_of)
+        if cleared:
+            print(f"  Cleared per-day stamps on {cleared} stale companies from prior weeks")
+
+        # 2. Set new week + day fields on the selected orgs
+        day_field_by_weekday = {
+            0: HS_FIELDS["day_monday"],
+            1: HS_FIELDS["day_tuesday"],
+            2: HS_FIELDS["day_wednesday"],
+            3: HS_FIELDS["day_thursday"],
+            4: HS_FIELDS["day_friday"],
+        }
         updates = []
         for o in all_selected:
-            updates.append({
-                "id": o.hs_id,
-                "properties": {
-                    HS_FIELDS["week_of"]:        week_of.isoformat(),
-                    HS_FIELDS["priority_score"]: o.score,
-                    HS_FIELDS["visit_reason"]:   o.visit_reason[:255],
-                }
-            })
+            assigned = day_assignments.get(o.hs_id)
+            props = {
+                HS_FIELDS["week_of"]:        week_of.isoformat(),
+                HS_FIELDS["priority_score"]: o.score,
+                HS_FIELDS["visit_reason"]:   o.visit_reason[:255],
+                # Clear all 5 day fields, then set the assigned one below
+                HS_FIELDS["day_monday"]:    "",
+                HS_FIELDS["day_tuesday"]:   "",
+                HS_FIELDS["day_wednesday"]: "",
+                HS_FIELDS["day_thursday"]:  "",
+                HS_FIELDS["day_friday"]:    "",
+            }
+            if assigned:
+                props[day_field_by_weekday[(assigned - week_of).days]] = assigned.isoformat()
+            updates.append({"id": o.hs_id, "properties": props})
         t = time.time()
         sent = hubspot_client.batch_update_companies(updates)
         print(f"  Pushed {sent:,} updates in {time.time()-t:.1f}s")
     else:
-        print(f"\nDRY RUN — no HubSpot writes. Re-run with --push to stamp visit_week_of "
-              f"on the {len(all_selected)} selected orgs.")
+        print(f"\nDRY RUN — no HubSpot writes. Re-run with --push to stamp visit_week_of + "
+              f"visit_<day> on the {len(all_selected)} selected orgs.")
 
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Daily bucketing (Mon-Fri) — geographic + open-days-aware
+# ---------------------------------------------------------------------------
+def assign_to_days(orgs: list[OrgRecord], week_monday: date) -> dict[str, date]:
+    """Split orgs into 5 daily buckets. Returns {hs_id: date}.
+
+    Algorithm:
+      1. Group orgs by territory (so each marketer's week is self-contained).
+      2. Within each territory, sort by zip (geographic clustering proxy).
+      3. Chunk into 5 groups of ~equal size (usually 10 each for a 50-target).
+      4. Bump `office_closed_fridays=true` offices out of the Friday bucket
+         into the smallest of the Mon-Thu buckets.
+      5. Assign the corresponding day-of-week date to each org.
+    """
+    import math
+    assignment: dict[str, date] = {}
+    by_territory: dict[str, list[OrgRecord]] = defaultdict(list)
+    for o in orgs:
+        by_territory[o.territory or "_none"].append(o)
+
+    days = [week_monday + timedelta(days=i) for i in range(5)]  # Mon..Fri
+
+    for _terr, terr_orgs in by_territory.items():
+        # Geographic-ish sort by zip
+        sorted_orgs = sorted(terr_orgs, key=lambda o: (o.zip or "99999", o.hs_id))
+        n = len(sorted_orgs)
+        chunk_size = max(1, math.ceil(n / 5))
+        buckets: list[list[OrgRecord]] = [
+            sorted_orgs[i * chunk_size:(i + 1) * chunk_size] for i in range(5)
+        ]
+        # Bump closed-Fridays offices out of the Friday bucket (index 4)
+        friday = buckets[4]
+        closed_fri = [o for o in friday if o.office_closed_fridays]
+        if closed_fri:
+            buckets[4] = [o for o in friday if not o.office_closed_fridays]
+            for o in closed_fri:
+                # Move to the smallest of Mon-Thu buckets
+                idx = min(range(4), key=lambda i: len(buckets[i]))
+                buckets[idx].append(o)
+        # Assign
+        for i, bucket in enumerate(buckets):
+            for o in bucket:
+                assignment[o.hs_id] = days[i]
+    return assignment
+
+
+def _clear_stale_day_stamps(this_week_monday: date) -> int:
+    """Clear visit_monday..visit_friday on companies whose visit_week_of is NOT
+    this week's Monday but still has a per-day stamp lingering. Returns count."""
+    import urllib.parse
+    # HubSpot search: companies where visit_week_of != this_monday AND any of the
+    # 5 day fields IS NOT EMPTY. Cheapest robust approach: search each day field.
+    day_field_names = [HS_FIELDS[k] for k in
+                       ("day_monday", "day_tuesday", "day_wednesday", "day_thursday", "day_friday")]
+    stale_ids: set = set()
+    this_monday_iso = this_week_monday.isoformat()
+    import datetime as _dt
+    this_monday_ms = int(_dt.datetime.fromisoformat(this_monday_iso)
+                         .replace(tzinfo=_dt.timezone.utc).timestamp() * 1000)
+    for field in day_field_names:
+        # Paginate through matches
+        after = None
+        while True:
+            body = {
+                "filterGroups": [{"filters": [
+                    {"propertyName": field, "operator": "HAS_PROPERTY"},
+                    {"propertyName": HS_FIELDS["week_of"], "operator": "NEQ", "value": this_monday_ms},
+                ]}],
+                "properties": [field],
+                "limit": 100,
+            }
+            if after: body["after"] = after
+            try:
+                d = hubspot_client.hs_post("/crm/v3/objects/companies/search", body)
+            except Exception:
+                break
+            for r in d.get("results", []): stale_ids.add(r["id"])
+            after = (d.get("paging") or {}).get("next", {}).get("after")
+            if not after: break
+    if not stale_ids:
+        return 0
+    # Clear all 5 day fields on each stale record
+    clear_props = {name: "" for name in day_field_names}
+    updates = [{"id": hs_id, "properties": clear_props} for hs_id in stale_ids]
+    hubspot_client.batch_update_companies(updates)
+    return len(stale_ids)
 
 
 def build_argparser():
