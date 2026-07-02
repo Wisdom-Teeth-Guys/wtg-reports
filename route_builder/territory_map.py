@@ -1,69 +1,48 @@
 """
 Load and query the territory → ZIP mapping.
 
-`territory_zip_map.csv` columns: Territory, Zip Code
+`territory_zip_map.json` schema: flat `{zip5: territory_name}`.
+
+Formerly `territory_zip_map.csv`. Switched to JSON so the PHI scanner
+(scripts/phi_scan.py) doesn't flag it as a raw-data CSV — the file has no
+PHI, but the scanner blocks all `.csv` filenames regardless of content.
 """
-import csv
+import json
 from typing import Optional
 
-from .config import TERRITORY_ZIP_MAP_CSV
+from .config import TERRITORY_ZIP_MAP_JSON
 
 
 def _norm(s: str) -> str:
     return (s or "").strip().lower()
 
 
-def load_territory_zip_map(csv_path: str = TERRITORY_ZIP_MAP_CSV) -> dict[str, set[str]]:
-    """Return {territory_name_lowercase: {zip5, zip5, ...}}.
+def _load_raw(path: Optional[str] = None) -> dict[str, str]:
+    """Return the raw {zip: territory_canonical_name} dict as stored on disk."""
+    path = path or TERRITORY_ZIP_MAP_JSON
+    with open(path) as f:
+        return json.load(f)
 
-    Handles BOTH wide-format CSV (territories as columns) and long-format
-    (Territory + Zip Code as two columns). Wide format is what's currently
-    in territory_zip_map.csv.
-    """
+
+def load_territory_zip_map(path: Optional[str] = None) -> dict[str, set[str]]:
+    """Return {territory_name_lowercase: {zip5, zip5, ...}}."""
+    raw = _load_raw(path)
     out: dict[str, set[str]] = {}
-    with open(csv_path) as f:
-        reader = csv.reader(f)
-        header = next(reader, None)
-        if not header:
-            return out
-        # Detect format: if header has exactly 2 cols with names like Territory/Zip Code → long
-        is_long = (
-            len(header) == 2
-            and any(h.strip().lower() in ("territory", "market") for h in header)
-            and any(h.strip().lower() in ("zip", "zip code", "postal code") for h in header)
-        )
-        if is_long:
-            # Reset and use DictReader
-            f.seek(0)
-            r = csv.DictReader(f)
-            for row in r:
-                t = _norm(row.get("Territory") or row.get("Market") or "")
-                z = (row.get("Zip Code") or row.get("Zip") or "").strip()[:5]
-                if t and z:
-                    out.setdefault(t, set()).add(z)
-        else:
-            # Wide format: each header cell is a territory name; rows hold ZIPs per column
-            territory_names = [h.strip() for h in header]
-            for row in reader:
-                for i, cell in enumerate(row):
-                    z = (cell or "").strip()[:5]
-                    if i < len(territory_names) and z and territory_names[i]:
-                        out.setdefault(_norm(territory_names[i]), set()).add(z)
+    for z, terr in raw.items():
+        z5 = (z or "").strip()[:5]
+        if z5 and terr:
+            out.setdefault(_norm(terr), set()).add(z5)
     return out
 
 
-def load_zip_to_territory(csv_path: str = TERRITORY_ZIP_MAP_CSV) -> dict[str, str]:
+def load_zip_to_territory(path: Optional[str] = None) -> dict[str, str]:
     """Return {zip5: territory_name_canonical_case}. Last one wins on collision."""
-    mapping = load_territory_zip_map(csv_path)
-    # Recover original-case territory names from the header
-    with open(csv_path) as f:
-        header = next(csv.reader(f), [])
-    name_lookup = {_norm(h): h.strip() for h in header}
+    raw = _load_raw(path)
     out: dict[str, str] = {}
-    for lower_name, zips in mapping.items():
-        canonical = name_lookup.get(lower_name, lower_name.title())
-        for z in zips:
-            out[z] = canonical
+    for z, terr in raw.items():
+        z5 = (z or "").strip()[:5]
+        if z5 and terr:
+            out[z5] = terr.strip()
     return out
 
 

@@ -11,7 +11,9 @@ import os
 # ----------------------------------------------------------------------------
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(PROJECT_ROOT, ".env")
-TERRITORY_ZIP_MAP_CSV = os.path.join(PROJECT_ROOT, "territory_zip_map.csv")
+TERRITORY_ZIP_MAP_JSON = os.path.join(PROJECT_ROOT, "territory_zip_map.json")
+# Legacy alias: some external code still imports TERRITORY_ZIP_MAP_CSV.
+TERRITORY_ZIP_MAP_CSV = TERRITORY_ZIP_MAP_JSON
 ROUTE_BUILDER_DIR = os.path.join(PROJECT_ROOT, "route_builder")
 DATA_DIR = os.path.join(ROUTE_BUILDER_DIR, "data")
 OUTPUT_DIR = os.path.join(ROUTE_BUILDER_DIR, "output")
