@@ -32,6 +32,7 @@ jobs:
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_SA_JSON:  ${{ secrets.GOOGLE_SA_JSON }}
         run: python -u sync_hubspot_deals.py
+        continue-on-error: true  # transient Google Sheets/HubSpot hiccups shouldn't block the deploy
 
       - name: Sync Google Ads → Google Sheets
         env:
@@ -58,18 +59,21 @@ jobs:
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_SA_JSON:  ${{ secrets.GOOGLE_SA_JSON }}
         run: python -u scripts/build_pipeline_dashboard.py
+        continue-on-error: true  # uses last-good sheet data if the sync above hiccupped
 
       - name: Build Deal Won Time Dashboard
         env:
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_SA_JSON:  ${{ secrets.GOOGLE_SA_JSON }}
         run: python -u scripts/build_deal_won_dashboard.py
+        continue-on-error: true
 
       - name: Build Executive Dashboard
         env:
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_SA_JSON:  ${{ secrets.GOOGLE_SA_JSON }}
         run: python -u scripts/build_executive_dashboard.py
+        continue-on-error: true
 
       - name: Build Google Ads Dashboard
         env:
