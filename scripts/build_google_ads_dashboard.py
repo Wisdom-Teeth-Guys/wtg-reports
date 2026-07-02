@@ -28,6 +28,13 @@ OUTPUT = OUT_DIR / "google_ads_dashboard.html"
 
 CITIES = ["Dallas", "Houston", "San Antonio", "Austin", "Phoenix", "Utah", "Tucson"]
 
+# Finance snapshot: hand-compiled monthly export from the s8e8 "Marketing ROI
+# Report" (production/collections are entered from the practice management
+# system, not pulled via API). Lives in the "s8e8_finance_raw" tab of the same
+# Google Sheet as google_ads_raw/deals_raw -- NOT a file in this repo (raw data
+# is never committed here, see .gitignore). Refresh via
+# scripts/update_s8e8_snapshot.py whenever Finance shares a new xlsx export.
+
 
 def load_sheet():
     creds = Credentials.from_service_account_info(
@@ -37,11 +44,15 @@ def load_sheet():
     sh = gspread.authorize(creds).open_by_key(os.environ["GOOGLE_SHEET_ID"])
     ga = pd.DataFrame(sh.worksheet("google_ads_raw").get_all_records())
     deals = pd.DataFrame(sh.worksheet("deals_raw").get_all_records())
-    return ga, deals
+    try:
+        fin = pd.DataFrame(sh.worksheet("s8e8_finance_raw").get_all_records())
+    except gspread.WorksheetNotFound:
+        fin = pd.DataFrame(columns=["market", "year", "month_num", "patients", "ad_spend", "collections"])
+    return ga, deals, fin
 
 
 print("Loading sheet…")
-ga, deals = load_sheet()
+ga, deals, fin = load_sheet()
 print(f"  → {len(ga)} Google Ads rows, {len(deals)} deals")
 
 
@@ -141,6 +152,61 @@ created_s = make_series(created)
 won_s     = make_series(won)
 
 
+# ─── Monthly CRM aggregation (for the finance comparison, which is monthly) ───
+ga["cal_year"]  = ga["date"].dt.year
+ga["cal_month"] = ga["date"].dt.month
+for col in ("create_dt", "won_dt"):
+    valid = ads_deals[col].notna()
+    ads_deals.loc[valid, f"{col}_cy"] = ads_deals.loc[valid, col].dt.year.values
+    ads_deals.loc[valid, f"{col}_cm"] = ads_deals.loc[valid, col].dt.month.values
+
+crm_spend_m   = ga.groupby(["city","cal_year","cal_month"])["cost_usd"].sum().to_dict()
+crm_created_m = ads_deals.dropna(subset=["create_dt_cy"]).groupby(
+    ["city","create_dt_cy","create_dt_cm"]
+).size().to_dict()
+crm_won_m = ads_deals.dropna(subset=["won_dt_cy"]).groupby(
+    ["city","won_dt_cy","won_dt_cm"]
+).size().to_dict()
+
+def make_month_series(d):
+    """Return dict {city: {"YYYY-MM": value}}."""
+    out = {c: {} for c in CITIES}
+    for (city, y, m), v in d.items():
+        if city not in out: continue
+        try:
+            key = f"{int(y):04d}-{int(m):02d}"
+        except (TypeError, ValueError): continue
+        out[city][key] = v
+    return out
+
+crm_spend_ms   = make_month_series(crm_spend_m)
+crm_created_ms = make_month_series(crm_created_m)
+crm_won_ms     = make_month_series(crm_won_m)
+
+
+# ─── Finance snapshot (s8e8 report, manually updated -- see "s8e8_finance_raw" comment above) ───
+finance_ms = {c: {} for c in CITIES}
+finance_as_of = None
+if not fin.empty:
+    fin = fin[fin["market"].isin(CITIES)].copy()
+    for _, r in fin.iterrows():
+        try:
+            key = f"{int(r['year']):04d}-{int(r['month_num']):02d}"
+        except (TypeError, ValueError):
+            continue
+        def _num(v):
+            return None if v in (None, "", "None") or pd.isna(v) else float(v)
+        finance_ms[r["market"]][key] = {
+            "patients":    _num(r["patients"]),
+            "spend":       _num(r["ad_spend"]),
+            "collections": _num(r["collections"]),
+        }
+        finance_as_of = key if finance_as_of is None else max(finance_as_of, key)
+    print(f"  Finance snapshot: {len(fin)} rows, latest month {finance_as_of}")
+else:
+    print("  ! s8e8_finance_raw tab is empty/missing -- comparison table will show no data until it's populated")
+
+
 UPDATE_DATE = datetime.now(timezone.utc).strftime("%B %-d, %Y")
 DATA = {
     "updateDate":    UPDATE_DATE,
@@ -152,6 +218,13 @@ DATA = {
         "impr":    impr_s,
         "created": created_s,
         "won":     won_s,
+    },
+    "monthly": {
+        "crmSpend":   crm_spend_ms,
+        "crmCreated": crm_created_ms,
+        "crmWon":     crm_won_ms,
+        "finance":    finance_ms,
+        "financeAsOf": finance_as_of,
     },
 }
 
@@ -206,6 +279,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px; }
 .chart-block .chart-label { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
 .chart-block .chart-wrap { height: 140px; }
+
+.reality { padding: 8px 28px 24px; max-width: 1800px; margin: 0 auto; }
+.reality-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.reality-head h2 { font-size: 18px; color: #1e3a5f; }
+.reality-panel { background: #fff; border-radius: 12px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); overflow-x: auto; }
+.reality-table { width: 100%; font-size: 12px; border-collapse: collapse; min-width: 980px; }
+.reality-table th, .reality-table td { padding: 7px 10px; text-align: right; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+.reality-table th { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; }
+.reality-table th:first-child, .reality-table td:first-child { text-align: left; font-weight: 600; color: #1e3a5f; }
+.reality-table thead tr.group-row th { text-align: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+.reality-table thead tr.group-row th.crm { color: #1e40af; }
+.reality-table thead tr.group-row th.fin { color: #92400e; }
+.reality-table tbody tr:hover { background: #f8fafc; }
+.reality-table td.na { color: #cbd5e1; }
+.reality-table td.pending { color: #cbd5e1; font-style: italic; }
 footer { text-align: center; font-size: 11px; color: #9ca3af; padding: 20px; }
 </style>
 </head>
@@ -254,6 +342,31 @@ footer { text-align: center; font-size: 11px; color: #9ca3af; padding: 20px; }
 
 <div class="summary" id="summary"></div>
 <div class="grid" id="grid"></div>
+
+<div class="reality">
+  <div class="reality-head">
+    <h2>Reality Check: CRM Funnel vs. Finance Actuals</h2>
+    <div class="fg">
+      <label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">City</label>
+      <select class="year-select" id="reality-city"></select>
+    </div>
+  </div>
+  <div class="banner" style="border-radius:8px;margin-bottom:12px;">
+    <b>Two different numbers, by design:</b>
+    <span style="color:#1e40af;font-weight:600;">CRM columns</span> = live daily sync from HubSpot/Pipedrive: raw Google Ads spend and deals marked Won (a pipeline stage, not a completed surgery).
+    <span style="color:#92400e;font-weight:600;">Finance columns</span> = the s8e8 Marketing ROI Report, a hand-compiled monthly snapshot from the practice management system: spend including Adwords management fee, and patients tied to a completed surgery, plus collections. Finance data is <b>not live</b> — it's only as current as the last export Finance shared (<span id="reality-as-of">—</span>) and must be refreshed manually via <code>scripts/update_s8e8_snapshot.py</code>.
+  </div>
+  <div class="reality-panel">
+    <table class="reality-table">
+      <thead>
+        <tr class="group-row"><th></th><th colspan="3" class="crm">CRM (HubSpot/Pipedrive, live)</th><th colspan="4" class="fin">Finance (s8e8 report, manual)</th></tr>
+        <tr><th>Month</th><th>Spend</th><th>Won</th><th>CPA</th><th>Spend (w/ mgmt fee)</th><th>Patients (surgery)</th><th>CPA</th><th>Collections</th></tr>
+      </thead>
+      <tbody id="reality-body"></tbody>
+    </table>
+  </div>
+</div>
+
 <footer>Auto-updated daily · Google Ads (2-yr history) + HubSpot deals where Lead Source = Google Adwords PPC</footer>
 
 <script>
@@ -385,6 +498,23 @@ function refresh(){
       const sign = pd >= 0 ? '▲' : '▼';
       return `<td class="delta ${cls}">${sign} ${Math.abs(pd)}%</td>`;
     };
+
+    // Finance (s8e8) mini-table: last 3 reported calendar months, independent
+    // of the week-range filter above (finance data is monthly, not weekly).
+    const finForCity = DATA.monthly.finance[city] || {};
+    const finKeys = Object.keys(finForCity).sort().reverse().slice(0, 3);
+    const finRowsHtml = finKeys.length ? finKeys.map(key => {
+      const f = finForCity[key];
+      const cpa = (f.spend != null && f.patients) ? f.spend / f.patients : null;
+      return `<tr>
+        <td>${monthLabel(key)}</td>
+        <td>${f.spend != null ? fmt$(f.spend) : '—'}</td>
+        <td>${f.patients != null ? fmt(f.patients) : '—'}</td>
+        <td>${cpa != null ? fmt$(cpa) : '—'}</td>
+        <td>${f.collections != null ? fmt$(f.collections) : '—'}</td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="5" style="text-align:center;color:#9ca3af;">No finance snapshot for ${city}</td></tr>`;
+
     panel.innerHTML = `
       <h3>${city} <span class="city-tag">${city.toUpperCase()}</span></h3>
       <table class="metrics-table">
@@ -400,7 +530,12 @@ function refresh(){
       <div class="chart-row">
         <div class="chart-block"><div class="chart-label">Weekly Spend</div><div class="chart-wrap"><canvas id="${safe}-spend"></canvas></div></div>
         <div class="chart-block"><div class="chart-label">Weekly Won (PPC)</div><div class="chart-wrap"><canvas id="${safe}-won"></canvas></div></div>
-      </div>`;
+      </div>
+      <div class="chart-label" style="margin-top:12px;color:#92400e;">Finance (s8e8 report, last 3 months — manual, not tied to week filter)</div>
+      <table class="metrics-table">
+        <thead><tr><th>Month</th><th>Spend (w/ fee)</th><th>Patients</th><th>CPA</th><th>Collections</th></tr></thead>
+        <tbody>${finRowsHtml}</tbody>
+      </table>`;
     grid.appendChild(panel);
 
     // Charts: weekly bars, TY vs LY
@@ -435,6 +570,66 @@ function refresh(){
   });
 }
 
+// ─── Reality Check: monthly CRM vs Finance comparison ───
+const MONTH_ABBR = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function monthLabel(key){
+  const [y, m] = key.split('-');
+  return `${MONTH_ABBR[parseInt(m)]} ${y}`;
+}
+
+const realityCitySel = document.getElementById('reality-city');
+DATA.cities.forEach(c => { realityCitySel.innerHTML += `<option value="${c}">${c}</option>`; });
+realityCitySel.value = DATA.cities[0];
+document.getElementById('reality-as-of').textContent = DATA.monthly.financeAsOf ? monthLabel(DATA.monthly.financeAsOf) : 'no data';
+realityCitySel.addEventListener('change', renderReality);
+
+function renderReality(){
+  const city = realityCitySel.value;
+  const m = DATA.monthly;
+  const crmSpend   = m.crmSpend[city]   || {};
+  const crmCreated = m.crmCreated[city] || {};
+  const crmWon     = m.crmWon[city]     || {};
+  const finance    = m.finance[city]    || {};
+
+  const keys = new Set([...Object.keys(crmSpend), ...Object.keys(finance)]);
+  const sortedKeys = [...keys].sort().reverse().slice(0, 18); // most recent 18 months
+
+  const naCell = () => '<td class="na">—</td>';
+  const rows = sortedKeys.map(key => {
+    const cSpend = crmSpend[key] || 0;
+    const cWon   = crmWon[key]   || 0;
+    const cCpa   = cWon > 0 ? cSpend / cWon : null;
+    const fin    = finance[key];
+
+    let finCells;
+    if (fin) {
+      const fSpend = fin.spend;
+      const fPat   = fin.patients;
+      const fColl  = fin.collections;
+      const fCpa   = (fSpend != null && fPat) ? fSpend / fPat : null;
+      finCells = `
+        <td>${fSpend != null ? fmt$(fSpend) : '—'}</td>
+        <td>${fPat != null ? fmt(fPat) : '—'}</td>
+        <td>${fCpa != null ? fmt$(fCpa) : '—'}</td>
+        <td>${fColl != null ? fmt$(fColl) : '—'}</td>`;
+    } else {
+      finCells = `<td class="pending" colspan="4">not yet in snapshot</td>`;
+    }
+
+    return `<tr>
+      <td>${monthLabel(key)}</td>
+      <td>${fmt$(cSpend)}</td>
+      <td>${fmt(cWon)}</td>
+      <td>${cCpa != null ? fmt$(cCpa) : '—'}</td>
+      ${finCells}
+    </tr>`;
+  });
+
+  document.getElementById('reality-body').innerHTML = rows.join('') ||
+    '<tr><td colspan="8" style="text-align:center;color:#9ca3af;">No data for this city yet.</td></tr>';
+}
+
+renderReality();
 refresh();
 </script>
 </body>
