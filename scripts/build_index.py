@@ -143,11 +143,15 @@ footer {{ margin-top: 40px; text-align: center; color: #a0aec0; font-size: 12px;
   </a>
 </div>
 
-<div class="section-title">Call-Center Operations</div>
+<div class="section-title">Call-Center Tools <span class="live-badge">LIVE</span></div>
 <div class="grid">
-  <a class="card live" target="_blank" rel="noopener" href="ops/ops_dashboard.html">
-    <h3>📞 Call-Center Ops &amp; Staffing</h3>
-    <p>Daily answer rate, call volume, abandons, wait time, and agents-active-by-hour — by market and agent, with YoY/WoW. Built for staffing decisions.</p>
+  <a class="card live" target="_blank" rel="noopener" href="https://ask.wisdomteethguys.com/dashboard">
+    <h3>📞 Ops Dashboard (live)</h3>
+    <p>Pick any date range + market — answer rate, call volume, abandons, wait time, staffing occupancy, and top agents. Aggregates on demand. Sign in with your WTG account.</p>
+  </a>
+  <a class="card live" target="_blank" rel="noopener" href="https://ask.wisdomteethguys.com">
+    <h3>💬 Ask the Data</h3>
+    <p>Ask the call data anything in plain English — "answer rate by market last week", "busiest hours", a specific agent or call. Sign in with your WTG account.</p>
   </a>
 </div>
 
