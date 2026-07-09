@@ -10,7 +10,7 @@ Thresholds (rolling 90-day dental WINS):
     Tier 3  1        ~quarterly
     Tier 4  0 wins in 90d AND 0 lifetime wins, but HAS referred
             → refers patients but we never convert (conversion problem)
-    Zero    0 wins in 90d, but has won before (dormant winner → win-back)
+    Win-Back  0 wins in 90d, but has won before (dormant winner)
     (blank) never referred at all
 
 Placeholder / catch-all offices (names containing 'unknown', 'no office',
@@ -45,7 +45,7 @@ LIFETIME_WINS_PROP = "dental_referral_wins_all_time"    # has it ever won?
 
 
 # Rank for drop detection (higher = better tier). blank/"" = -1.
-TIER_RANK = {"VIP": 5, "Tier 1": 4, "Tier 2": 3, "Tier 3": 2, "Tier 4": 1, "Zero": 0, "": -1}
+TIER_RANK = {"VIP": 5, "Tier 1": 4, "Tier 2": 3, "Tier 3": 2, "Tier 4": 1, "Win-Back": 0, "": -1}
 
 
 def tier_for(wins90: int, lifetime_refs: int, lifetime_wins: int) -> str:
@@ -56,7 +56,7 @@ def tier_for(wins90: int, lifetime_refs: int, lifetime_wins: int) -> str:
     # 0 wins in last 90d:
     if lifetime_refs == 0: return ""           # never referred → blank
     if lifetime_wins == 0: return "Tier 4"     # referred but NEVER won (conversion problem)
-    return "Zero"                              # won before, dormant → win-back
+    return "Win-Back"                          # won before, dormant
 
 
 def is_placeholder(name: str) -> bool:
@@ -157,7 +157,7 @@ def main(push):
 
     print(f"Scanned {scanned:,} companies. Excluded {excluded} placeholders.\n")
     print("Target tier distribution:")
-    for k in ("VIP","Tier 1","Tier 2","Tier 3","Tier 4","Zero","(excluded)"):
+    for k in ("VIP","Tier 1","Tier 2","Tier 3","Tier 4","Win-Back","(excluded)"):
         print(f"  {k:<12} {dist.get(k,0):>7,}")
     print(f"\nMovement since last reconcile:  {moved_up} up, {moved_down} down")
     print(f"{len(updates):,} companies need an update.")
