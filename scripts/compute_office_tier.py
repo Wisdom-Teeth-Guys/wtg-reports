@@ -3,14 +3,16 @@ Compute Company.tier_current from dental_referral_wins_last_90_days (quarterly).
 
 TIER TRIGGER = WINS (won dental referrals) in the rolling last 90 days.
 
+Redesigned 2026-07-09 (v2): merged old Tier1(3-4)+Tier2(=2) -> Tier 1;
+renamed old Tier3(=1) -> Tier 2; merged old Tier4(never won)+Win-Back(won
+before) -> Tier 3 (no longer distinguishes lifetime-win history).
+
 Thresholds (rolling 90-day dental WINS):
-    VIP    >= 5      visit ~monthly
-    Tier 1  3-4      ~every 6 weeks
-    Tier 2  2        ~every 8-9 weeks
-    Tier 3  1        ~quarterly
-    Tier 4  0 wins in 90d AND 0 lifetime wins, but HAS referred
-            → refers patients but we never convert (conversion problem)
-    Zero    0 wins in 90d, but has won before (dormant winner → win-back)
+    VIP     >= 5     visit ~monthly
+    Tier 1   2-4     ~every 6-9 weeks
+    Tier 2   1       ~quarterly
+    Tier 3   0 wins in 90d, but HAS referred at any time (any lifetime-win
+             status) → the re-engagement / win-back bucket
     (blank) never referred at all
 
 Placeholder / catch-all offices (names containing 'unknown', 'no office',
@@ -41,22 +43,19 @@ HDRS = {"Authorization": f"Bearer {HS}", "Content-Type": "application/json"}
 PLACEHOLDER_PATTERNS = ("unknown", "no office", "no name", "no-office")
 TIER_PROP = "dental_referral_wins_last_90_days"       # tier trigger = WINS in last 90d
 LIFETIME_REFS_PROP = "dental_referrals_life_time"       # has it ever referred?
-LIFETIME_WINS_PROP = "dental_referral_wins_all_time"    # has it ever won?
 
 
 # Rank for drop detection (higher = better tier). blank/"" = -1.
-TIER_RANK = {"VIP": 5, "Tier 1": 4, "Tier 2": 3, "Tier 3": 2, "Tier 4": 1, "Zero": 0, "": -1}
+TIER_RANK = {"VIP": 4, "Tier 1": 3, "Tier 2": 2, "Tier 3": 1, "": -1}
 
 
-def tier_for(wins90: int, lifetime_refs: int, lifetime_wins: int) -> str:
+def tier_for(wins90: int, lifetime_refs: int) -> str:
     if wins90 >= 5: return "VIP"
-    if wins90 >= 3: return "Tier 1"
-    if wins90 == 2: return "Tier 2"
-    if wins90 == 1: return "Tier 3"
+    if wins90 >= 2: return "Tier 1"
+    if wins90 == 1: return "Tier 2"
     # 0 wins in last 90d:
     if lifetime_refs == 0: return ""           # never referred → blank
-    if lifetime_wins == 0: return "Tier 4"     # referred but NEVER won (conversion problem)
-    return "Zero"                              # won before, dormant → win-back
+    return "Tier 3"                            # referred at any time, 0 wins in last 90d
 
 
 def is_placeholder(name: str) -> bool:
@@ -98,7 +97,7 @@ def main(push):
     today = date.today().isoformat()
     print(f"Computing tier_current from {TIER_PROP}  ({'PUSH' if push else 'DRY RUN'})\n")
     qs = (f"limit=100&properties=name&properties={TIER_PROP}"
-          f"&properties={LIFETIME_REFS_PROP}&properties={LIFETIME_WINS_PROP}"
+          f"&properties={LIFETIME_REFS_PROP}"
           f"&properties=tier_current&properties=tier_prior_week")
     after = None
     updates = []
@@ -122,13 +121,12 @@ def main(push):
                 return int(float(v)) if v not in (None, "") else 0
             wins = _iv(TIER_PROP)
             lifetime_refs = _iv(LIFETIME_REFS_PROP)
-            lifetime_wins = _iv(LIFETIME_WINS_PROP)
 
             if is_placeholder(name):
                 excluded += 1
                 desired = ""   # clear — excluded from tiering
             else:
-                desired = tier_for(wins, lifetime_refs, lifetime_wins)
+                desired = tier_for(wins, lifetime_refs)
 
             dist[desired or "(excluded)"] += 1
 
@@ -157,7 +155,7 @@ def main(push):
 
     print(f"Scanned {scanned:,} companies. Excluded {excluded} placeholders.\n")
     print("Target tier distribution:")
-    for k in ("VIP","Tier 1","Tier 2","Tier 3","Tier 4","Zero","(excluded)"):
+    for k in ("VIP","Tier 1","Tier 2","Tier 3","(excluded)"):
         print(f"  {k:<12} {dist.get(k,0):>7,}")
     print(f"\nMovement since last reconcile:  {moved_up} up, {moved_down} down")
     print(f"{len(updates):,} companies need an update.")
