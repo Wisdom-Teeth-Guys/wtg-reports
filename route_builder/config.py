@@ -14,6 +14,9 @@ ENV_PATH = os.path.join(PROJECT_ROOT, ".env")
 TERRITORY_ZIP_MAP_JSON = os.path.join(PROJECT_ROOT, "territory_zip_map.json")
 # Legacy alias: some external code still imports TERRITORY_ZIP_MAP_CSV.
 TERRITORY_ZIP_MAP_CSV = TERRITORY_ZIP_MAP_JSON
+# Optional: {territory: {subzone_name: [zip5, ...]}} — enables weekly zone rotation
+# for driving efficiency. If absent, the whole territory is one zone (no rotation).
+TERRITORY_SUBZONES_JSON = os.path.join(PROJECT_ROOT, "territory_subzones.json")
 ROUTE_BUILDER_DIR = os.path.join(PROJECT_ROOT, "route_builder")
 DATA_DIR = os.path.join(ROUTE_BUILDER_DIR, "data")
 OUTPUT_DIR = os.path.join(ROUTE_BUILDER_DIR, "output")

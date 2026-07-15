@@ -378,9 +378,15 @@ def main(args) -> int:
             if os.path.exists(default_override):
                 overrides_path = default_override
         force_in, exclude = load_overrides(overrides_path, canonical)
-        # Score + select (cadence-based: tier rules first, then T4 fill, then Zero)
+        # Zone rotation: this week's focus subzone for this territory (may be None).
+        focus_zips, zone_label = _week_focus_zips(canonical, week_of)
+        if zone_label:
+            summary_lines.append(f"    zone this week: {zone_label} ({len(focus_zips)} zips)")
+        # Score + select (cadence-based inside the current zone; falls back
+        # to whole territory if the zone can't fill n slots)
         selected = select_by_cadence(t_orgs, ORGS_PER_REP, today,
-                                     force_include_ids=force_in, exclude_ids=exclude)
+                                     force_include_ids=force_in, exclude_ids=exclude,
+                                     focus_zips=focus_zips)
         # Annotate territory for output
         for o in selected:
             o.territory = canonical
@@ -468,6 +474,44 @@ def main(args) -> int:
               f"visit_<day> on the {len(all_selected)} selected orgs.")
 
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Weekly zone rotation — reduces marketer drive-time within each week
+# ---------------------------------------------------------------------------
+_SUBZONES_CACHE: Optional[dict] = None
+
+def _load_subzones() -> dict:
+    """Return {territory: {subzone_name: [zip5, ...]}} from disk. Cached."""
+    global _SUBZONES_CACHE
+    if _SUBZONES_CACHE is not None:
+        return _SUBZONES_CACHE
+    from .config import TERRITORY_SUBZONES_JSON
+    try:
+        import json as _json
+        with open(TERRITORY_SUBZONES_JSON) as f:
+            _SUBZONES_CACHE = _json.load(f)
+    except FileNotFoundError:
+        _SUBZONES_CACHE = {}
+    return _SUBZONES_CACHE
+
+
+def _week_focus_zips(territory: str, week_monday: date) -> tuple[Optional[set[str]], Optional[str]]:
+    """Return (focus_zips, subzone_label) for a territory's current-week zone.
+
+    Rotates through the territory's subzones deterministically by ISO week
+    number so the same week always maps to the same zone. Returns (None, None)
+    if the territory has no subzone definition (falls back to whole territory).
+    """
+    subzones = _load_subzones().get(territory)
+    if not subzones or len(subzones) < 2:
+        return None, None
+    zone_names = sorted(subzones.keys())  # deterministic order
+    iso_week = week_monday.isocalendar()[1]  # 1..53
+    idx = iso_week % len(zone_names)
+    label = zone_names[idx]
+    zips = {z[:5] for z in subzones[label]}
+    return zips, label
 
 
 # ---------------------------------------------------------------------------

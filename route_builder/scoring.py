@@ -180,19 +180,24 @@ def _promote_untiered_with_wins(orgs: list[OrgRecord]) -> None:
 
 def select_by_cadence(orgs: list[OrgRecord], n: int, today: date,
                       force_include_ids: Optional[set[str]] = None,
-                      exclude_ids: Optional[set[str]] = None) -> list[OrgRecord]:
+                      exclude_ids: Optional[set[str]] = None,
+                      focus_zips: Optional[set[str]] = None) -> list[OrgRecord]:
     """Cadence-based selection (replaces score-based for weekly routes).
 
     Algorithm:
-      0. Filter out closed_permanent + excluded.
+      0. Filter out closed_permanent + excluded. If focus_zips is provided,
+         restrict the primary pool to orgs whose zip is in that set (weekly
+         zone-rotation for driving efficiency); fall back to full pool only if
+         the zone pool can't fill n slots.
       1. Promote untiered-with-wins to Tier 4.
-      2. Pass A — Mandatory: any org whose tier has a cadence rule and is overdue
+      2. Pass A — Rollover: falloff_flag=true (missed last week).
+      3. Pass B — Mandatory: any org whose tier has a cadence rule and is overdue
          (days_since_last_visit >= rule, OR never visited). Sorted most-overdue
          first; capped at n.
-      3. Pass B — Priority fill: if slots remain, pull Tier 4 orgs (most overdue
+      4. Pass C — Priority fill: if slots remain, pull Tier 4 orgs (most overdue
          first; never-visited counts as overdue).
-      4. Pass C — Leftover: if slots STILL remain, pull Zero (most overdue first).
-      5. force_include_ids jump to the top of the final list.
+      5. Pass D — Leftover: if slots STILL remain, pull Zero (most overdue first).
+      6. force_include_ids jump to the top of the final list.
 
     Side effect: each selected org gets a `visit_reason` reflecting the bucket.
     """
@@ -200,12 +205,18 @@ def select_by_cadence(orgs: list[OrgRecord], n: int, today: date,
     force_include_ids = force_include_ids or set()
     exclude_ids = exclude_ids or set()
 
-    # 0. Filter
-    active = [
+    # 0. Filter — exclude suppressed outcomes + manual excludes
+    all_active = [
         o for o in orgs
         if o.hs_id not in exclude_ids
         and o.last_visit_outcome not in SUPPRESSED_OUTCOMES
     ]
+    # Zone-focused primary pool: only orgs whose zip is in focus_zips.
+    # If focus_zips is None, treat the whole territory as one zone.
+    if focus_zips:
+        active = [o for o in all_active if (o.zip or "")[:5] in focus_zips]
+    else:
+        active = all_active
     # 1. Promote
     _promote_untiered_with_wins(active)
     # Also run scoring so the CSV exports retain a score for inspection
@@ -261,8 +272,23 @@ def select_by_cadence(orgs: list[OrgRecord], n: int, today: date,
                               "Zero leftover (never visited)")
             selected.append(o); seen.add(o.hs_id)
 
-    # 5. force_include jumps to top
-    forced = [o for o in active if o.hs_id in force_include_ids and o.hs_id not in seen]
+    # 5. Fallback — if zone pool still too small to fill n, spill over to the
+    # rest of the territory (out-of-zone). Sort by tier priority + overdue.
+    if focus_zips and len(selected) < n:
+        tier_order = {"VIP": 0, "Tier 1": 1, "Tier 2": 2, "Tier 3": 3, "Tier 4": 4, "Zero": 5}
+        out_of_zone = [o for o in all_active if o.hs_id not in seen]
+        # rough re-sort: mandatory-tier first, then most-overdue
+        out_of_zone.sort(key=lambda o: (
+            tier_order.get(o.tier, 6),
+            -_days_since(o.last_visit_date, today),
+        ))
+        for o in out_of_zone:
+            if len(selected) >= n: break
+            o.visit_reason = f"OUT-OF-ZONE fill ({o.tier or 'Zero'})"
+            selected.append(o); seen.add(o.hs_id)
+
+    # 6. force_include jumps to top (checked against ALL active, not just zone)
+    forced = [o for o in all_active if o.hs_id in force_include_ids and o.hs_id not in seen]
     for o in forced:
         o.visit_reason = "FORCE_IN override"
     return forced + selected[: n - len(forced)] if forced else selected
