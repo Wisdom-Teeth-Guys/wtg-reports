@@ -1,0 +1,89 @@
+name: weekly_routes
+
+# Two scheduled jobs:
+#  - build:   Sunday 8:00 AM CT  (= 13:00 UTC during CDT, 14:00 UTC during CST)
+#             Runs during Sunday DAY so the HS→MMC hourly sync has all Sunday to
+#             propagate the visit_week_of + visit_<day> stamps into MMC. By Monday
+#             morning, marketers open MMC and their "Monday" saved filter is live.
+#  - audit:   Saturday 10:00 AM CT  (= 15:00 UTC during CDT, 16:00 UTC during CST)
+#             Runs the morning AFTER the workweek ends so late-Friday Spotio
+#             visits have had time to sync. Compares planned vs Spotio-visited,
+#             sets falloff_flag=true on missed orgs so the next Sunday's run
+#             boosts them.
+#
+# Cron is in UTC. CDT (Mar–Nov) is UTC-5; CST (Nov–Mar) is UTC-6. We schedule for the
+# CDT offset since that's most of the year; during winter the run lands an hour earlier
+# in local time, which is fine for our purposes.
+#
+# Manual run: Actions → weekly_routes → "Run workflow"
+
+on:
+  schedule:
+    - cron: "0 13 * * 0"  # Sun 13:00 UTC  ≈ Sun 8am CT  → build_weekly_routes --push
+    - cron: "0 15 * * 6"  # Sat 15:00 UTC  ≈ Sat 10am CT → route_audit_report --apply-boost --push
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which job to run manually"
+        required: true
+        default: build
+        type: choice
+        options: [build, audit]
+
+permissions:
+  contents: read
+
+jobs:
+  weekly_routes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Write .env from secrets
+        run: |
+          cat > .env <<EOF
+          HUBSPOT_TOKEN=${{ secrets.HUBSPOT_TOKEN }}
+          SPOTIO_CLIENT_ID=${{ secrets.SPOTIO_CLIENT_ID }}
+          SPOTIO_API_SECRET=${{ secrets.SPOTIO_API }}
+          EOF
+
+      - name: Decide which job to run
+        id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "job=${{ inputs.job }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 13 * * 0" ]; then
+            echo "job=build" >> $GITHUB_OUTPUT
+          else
+            echo "job=audit" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build weekly routes (push)
+        if: steps.pick.outputs.job == 'build'
+        run: |
+          python3 -m route_builder.build_weekly_routes --push 2>&1 | tee /tmp/build.log
+
+      - name: Audit last week (apply-boost + push)
+        if: steps.pick.outputs.job == 'audit'
+        run: |
+          # Running Saturday morning; "this week's Monday" is 5 days back (weekday=5).
+          # date.weekday() returns 0=Mon..6=Sun, so subtracting it always lands on this week's Monday.
+          THIS_MON=$(python3 -c "import datetime;d=datetime.date.today();print(d - datetime.timedelta(days=d.weekday()))")
+          python3 -m route_builder.route_audit_report --week-of "$THIS_MON" --apply-boost --push 2>&1 | tee /tmp/audit.log
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-routes-${{ steps.pick.outputs.job }}-${{ github.run_id }}
+          path: |
+            route_builder/output/**
+            /tmp/build.log
+            /tmp/audit.log
+          if-no-files-found: ignore
+          retention-days: 30
