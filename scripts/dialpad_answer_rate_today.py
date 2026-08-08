@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""One-shot: print today's answer rate across all inbound *Main contact centers."""
+"""One-shot: print today's answer rate across all inbound *Main contact centers.
+
+Uses export_type=records (individual call records) instead of stats (per-user
+aggregates), so unanswered calls are included in the count.
+"""
 
 import os, time, csv, io, requests
 
@@ -41,12 +45,19 @@ def to_market(n):
 market_total = {}     # market -> total inbound
 market_answered = {}  # market -> answered
 
+# Dispositions that count as "answered" — anything where a human picked up.
+# Everything else (voicemail, abandoned, missed, etc.) counts as unanswered.
+ANSWERED_DISPOSITIONS = {
+    "answered", "transferred", "connected",
+    "human_answered", "agent_answered",
+}
+
 for c in mains:
     cid, name = str(c["id"]), c.get("name", "?")
     payload = {
         "days_ago_start": 0, "days_ago_end": 0,
         "target_id": cid, "target_type": "callcenter",
-        "stat_type": "calls", "export_type": "stats",
+        "stat_type": "calls", "export_type": "records",   # ← INDIVIDUAL CALL RECORDS
         "is_today": True, "timezone": "America/Chicago",
         "coaching_group": False,
     }
@@ -66,21 +77,25 @@ for c in mains:
     csv_text = requests.get(url, headers=H, timeout=30).text
     reader = csv.DictReader(io.StringIO(csv_text))
     rows = list(reader)
-    # Find inbound and answered columns
-    if not rows: continue
-    headers = list(rows[0].keys())
-    # Try common header names
-    total_col = next((h for h in headers if h.lower() in ('inbound_calls','total_inbound','inbound')), None)
-    ans_col = next((h for h in headers if 'answered' in h.lower() and 'inbound' in h.lower()), None) \
-            or next((h for h in headers if h.lower() in ('answered','total_answered')), None)
-    if not total_col or not ans_col:
-        print(f"  ! {name}: columns unclear. Headers: {headers}", flush=True); continue
-    tot = sum(int(r[total_col] or 0) for r in rows)
-    ans = sum(int(r[ans_col] or 0) for r in rows)
+    # Only inbound calls
+    inbound = [r for r in rows if (r.get("direction") or "").lower() == "inbound"]
+    tot = len(inbound)
+    # Find the disposition / state column — try a few likely names
+    if inbound:
+        hdrs = list(inbound[0].keys())
+        state_col = next((h for h in hdrs if h.lower() in ("call_outcome","disposition","state","status")), None)
+    else:
+        state_col = None
+    ans = 0
+    if state_col:
+        for r in inbound:
+            val = (r.get(state_col) or "").lower().strip()
+            if any(a in val for a in ANSWERED_DISPOSITIONS):
+                ans += 1
     m = to_market(name)
     market_total[m]    = market_total.get(m, 0) + tot
     market_answered[m] = market_answered.get(m, 0) + ans
-    print(f"  ✓ {name}: {ans}/{tot}", flush=True)
+    print(f"  ✓ {name}: {ans}/{tot} (state_col={state_col})", flush=True)
 
 # Summary
 print("\n" + "="*60)
