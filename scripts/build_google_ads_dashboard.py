@@ -30,10 +30,11 @@ CITIES = ["Dallas", "Houston", "San Antonio", "Austin", "Phoenix", "Utah", "Tucs
 
 # Finance snapshot: hand-compiled monthly export from the s8e8 "Marketing ROI
 # Report" (production/collections are entered from the practice management
-# system, not pulled via API). Lives in the "s8e8_finance_raw" tab of the same
-# Google Sheet as google_ads_raw/deals_raw -- NOT a file in this repo (raw data
-# is never committed here, see .gitignore). Refresh via
+# system, not pulled via API). This is aggregate market/month data (no
+# patient-level info), committed to the repo despite the general "no raw
+# data" .gitignore rule -- see the explicit exception there. Refresh via
 # scripts/update_s8e8_snapshot.py whenever Finance shares a new xlsx export.
+FINANCE_CSV = Path(__file__).resolve().parent / "data" / "s8e8_google_ppc_snapshot.csv"
 
 
 def load_sheet():
@@ -44,15 +45,13 @@ def load_sheet():
     sh = gspread.authorize(creds).open_by_key(os.environ["GOOGLE_SHEET_ID"])
     ga = pd.DataFrame(sh.worksheet("google_ads_raw").get_all_records())
     deals = pd.DataFrame(sh.worksheet("deals_raw").get_all_records())
-    try:
-        fin = pd.DataFrame(sh.worksheet("s8e8_finance_raw").get_all_records())
-    except gspread.WorksheetNotFound:
-        fin = pd.DataFrame(columns=["market", "year", "month_num", "patients", "ad_spend", "collections"])
-    return ga, deals, fin
+    return ga, deals
 
 
 print("Loading sheet…")
-ga, deals, fin = load_sheet()
+ga, deals = load_sheet()
+fin = pd.read_csv(FINANCE_CSV) if FINANCE_CSV.exists() else pd.DataFrame(
+    columns=["market", "year", "month_num", "patients", "ad_spend", "collections"])
 print(f"  → {len(ga)} Google Ads rows, {len(deals)} deals")
 
 
@@ -184,7 +183,7 @@ crm_created_ms = make_month_series(crm_created_m)
 crm_won_ms     = make_month_series(crm_won_m)
 
 
-# ─── Finance snapshot (s8e8 report, manually updated -- see "s8e8_finance_raw" comment above) ───
+# ─── Finance snapshot (s8e8 report, manually updated -- see FINANCE_CSV comment above) ───
 finance_ms = {c: {} for c in CITIES}
 finance_as_of = None
 if not fin.empty:
@@ -204,7 +203,7 @@ if not fin.empty:
         finance_as_of = key if finance_as_of is None else max(finance_as_of, key)
     print(f"  Finance snapshot: {len(fin)} rows, latest month {finance_as_of}")
 else:
-    print("  ! s8e8_finance_raw tab is empty/missing -- comparison table will show no data until it's populated")
+    print(f"  ! {FINANCE_CSV} not found/empty -- comparison table will show no data until it's populated")
 
 
 UPDATE_DATE = datetime.now(timezone.utc).strftime("%B %-d, %Y")
