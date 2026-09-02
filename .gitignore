@@ -17,3 +17,8 @@ service-account-*.json
 marketer_reports/cache/
 marketer_reports/data/
 marketer_reports/scripts/audit/
+
+# Exception: aggregate market/month finance snapshot (no patient-level data),
+# needed at Google-Ads-dashboard build time in GitHub Actions. Refreshed via
+# scripts/update_s8e8_snapshot.py whenever Finance shares a new xlsx export.
+!scripts/data/s8e8_google_ppc_snapshot.csv
