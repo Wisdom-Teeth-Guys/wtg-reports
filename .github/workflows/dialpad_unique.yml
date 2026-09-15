@@ -1,6 +1,9 @@
 name: Dialpad unique callers (standalone)
 
 on:
+  schedule:
+    # Daily at 6:00 AM Central Time (12:00 UTC during CST, 11:00 UTC during CDT — use 12 UTC for simplicity)
+    - cron: "0 12 * * *"
   workflow_dispatch:
 
 jobs:
