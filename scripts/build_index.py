@@ -38,9 +38,12 @@ if MK_SRC.exists():
                 metadata[slug] = info
         except Exception as e:
             print(f"  ! couldn't parse marketers.yaml: {e}")
+    EXCLUDE_SLUGS = {"visit_history"}  # cross-rep tools, not individual marketer reports
     for f in sorted(MK_SRC.glob("*.html")):
         slug = f.stem
         shutil.copy(f, MK_OUT / f.name)
+        if slug in EXCLUDE_SLUGS:
+            continue
         info = metadata.get(slug, {})
         marketers.append({
             "filename": f.name,
@@ -140,6 +143,10 @@ footer {{ margin-top: 40px; text-align: center; color: #a0aec0; font-size: 12px;
   <a class="card live" target="_blank" rel="noopener" href="google_ads_dashboard.html">
     <h3>💰 Google Ads Dashboard</h3>
     <p>Google Ads spend by city + HubSpot deals attributed to Google Adwords PPC. Effective CPA by location.</p>
+  </a>
+  <a class="card live" target="_blank" rel="noopener" href="marketer_reports/visit_history.html">
+    <h3>🚗 Field Visit History</h3>
+    <p>Every field visit, 2022–present — SPOTIO backfill + live MMC check-ins combined. Filter by rep/territory/date, export to CSV.</p>
   </a>
 </div>
 
