@@ -39,6 +39,11 @@ if MK_SRC.exists():
         except Exception as e:
             print(f"  ! couldn't parse marketers.yaml: {e}")
     EXCLUDE_SLUGS = {"visit_history"}  # cross-rep tools, not individual marketer reports
+    # Reports that load a sibling data file at runtime (e.g. visit_history's
+    # fetch('visit_history_data.json')) need that file copied too -- *.html
+    # alone silently drops it, which 404s at runtime instead of failing the build.
+    for f in sorted(MK_SRC.glob("*.json")):
+        shutil.copy(f, MK_OUT / f.name)
     for f in sorted(MK_SRC.glob("*.html")):
         slug = f.stem
         shutil.copy(f, MK_OUT / f.name)
