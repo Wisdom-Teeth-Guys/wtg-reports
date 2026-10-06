@@ -141,7 +141,7 @@
     <button class="theme-toggle" id="themeToggle">Dark mode</button>
   </div>
 
-  <div id="loadingMsg" class="loading">Loading 204,583 visit records…</div>
+  <div id="loadingMsg" class="loading">Loading visit records…</div>
 
   <div id="app" style="display:none">
 
@@ -183,6 +183,10 @@
         <input type="text" id="fCompany" placeholder="e.g. Smile Dental">
       </div>
       <div class="field">
+        <label for="fZip">Zip</label>
+        <input type="text" id="fZip" placeholder="e.g. 75201" style="min-width:90px">
+      </div>
+      <div class="field">
         <label for="fFrom">From</label>
         <input type="date" id="fFrom">
       </div>
@@ -205,7 +209,7 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Date</th><th>Rep</th><th>Office</th><th>Territory</th><th>Result</th><th>Source</th></tr>
+          <tr><th>Date</th><th>Rep</th><th>Office</th><th>Address</th><th>Zip</th><th>Territory</th><th>Result</th><th>Source</th></tr>
         </thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -263,6 +267,7 @@
     ['fRep','fTerr','fFrom','fTo','fSpotio','fMmc'].forEach(id =>
       document.getElementById(id).addEventListener('change', () => { page = 0; applyFilters(); }));
     document.getElementById('fCompany').addEventListener('input', debounce(() => { page = 0; applyFilters(); }, 200));
+    document.getElementById('fZip').addEventListener('input', debounce(() => { page = 0; applyFilters(); }, 200));
     document.getElementById('clearFilters').addEventListener('click', clearFilters);
     document.getElementById('exportBtn').addEventListener('click', exportCsv);
     document.getElementById('prevPage').addEventListener('click', () => { if (page > 0) { page--; renderTable(); } });
@@ -279,6 +284,7 @@
     document.getElementById('fRep').value = '';
     document.getElementById('fTerr').value = '';
     document.getElementById('fCompany').value = '';
+    document.getElementById('fZip').value = '';
     document.getElementById('fFrom').value = '';
     document.getElementById('fTo').value = '';
     document.getElementById('fSpotio').checked = true;
@@ -291,6 +297,7 @@
     const repVal = document.getElementById('fRep').value;
     const terrVal = document.getElementById('fTerr').value;
     const companyVal = document.getElementById('fCompany').value.trim().toLowerCase();
+    const zipVal = document.getElementById('fZip').value.trim();
     const fromVal = document.getElementById('fFrom').value;
     const toVal = document.getElementById('fTo').value;
     const showSpotio = document.getElementById('fSpotio').checked;
@@ -308,6 +315,7 @@
       if (fromVal && date < fromVal) return false;
       if (toVal && date > toVal) return false;
       if (companyVal && !DATA.companies[company].toLowerCase().includes(companyVal)) return false;
+      if (zipVal && DATA.zips[company] !== zipVal) return false;
       return true;
     });
 
@@ -440,6 +448,8 @@
         <td>${date}</td>
         <td>${DATA.reps[rep]}</td>
         <td>${DATA.companies[company]}</td>
+        <td>${DATA.addresses[company] || ''}</td>
+        <td>${DATA.zips[company] || ''}</td>
         <td>${DATA.territories[terr]}</td>
         <td>${DATA.results[result]}</td>
         <td><span class="tag ${srcClass}">${srcLabel}</span></td>
@@ -454,11 +464,11 @@
   }
 
   function exportCsv() {
-    const header = ['Date', 'Rep', 'Office', 'Territory', 'Result', 'Source'];
+    const header = ['Date', 'Rep', 'Office', 'Address', 'Zip', 'Territory', 'Result', 'Source'];
     const lines = [header.join(',')];
     filtered.forEach(r => {
       const [date, rep, company, terr, result, source] = r;
-      const row = [date, DATA.reps[rep], DATA.companies[company], DATA.territories[terr], DATA.results[result], source === 0 ? 'SPOTIO' : 'MMC']
+      const row = [date, DATA.reps[rep], DATA.companies[company], DATA.addresses[company] || '', DATA.zips[company] || '', DATA.territories[terr], DATA.results[result], source === 0 ? 'SPOTIO' : 'MMC']
         .map(v => `"${String(v).replace(/"/g, '""')}"`);
       lines.push(row.join(','));
     });
