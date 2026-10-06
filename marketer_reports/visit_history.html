@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Field Visit History — SPOTIO + MMC</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-0:      #ffffff;
+    --surface-1:      #fcfcfb;
+    --surface-2:      #f4f3f0;
+    --border:         #e3e1da;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #86847c;
+    --series-spotio:  #2a78d6;
+    --series-mmc:     #eb6834;
+    --focus:          #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-0:      #121211;
+      --surface-1:      #1a1a19;
+      --surface-2:      #232321;
+      --border:         #34332f;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #8b897f;
+      --series-spotio:  #3987e5;
+      --series-mmc:     #d95926;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-0:      #121211;
+    --surface-1:      #1a1a19;
+    --surface-2:      #232321;
+    --border:         #34332f;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #8b897f;
+    --series-spotio:  #3987e5;
+    --series-mmc:     #d95926;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--surface-0);
+    color: var(--text-primary);
+  }
+  .viz-root { max-width: 1280px; margin: 0 auto; padding: 24px 20px 64px; }
+
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 16px; flex-wrap: wrap; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 14px; margin: 0; }
+  .theme-toggle {
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text-secondary);
+    border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer;
+  }
+
+  .stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat-tile {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .stat-tile .label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+  .stat-tile .value { font-size: 22px; font-weight: 600; }
+  .stat-tile .value.spotio { color: var(--series-spotio); }
+  .stat-tile .value.mmc { color: var(--series-mmc); }
+
+  .chart-section { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 20px; }
+  .chart-title { font-size: 14px; font-weight: 600; margin: 0 0 2px; }
+  .chart-sub { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  svg text { fill: var(--text-secondary); font-size: 11px; }
+  .gridline { stroke: var(--border); stroke-width: 1; }
+  .bar-spotio { fill: var(--series-spotio); }
+  .bar-mmc { fill: var(--series-mmc); }
+  .hover-target { cursor: pointer; }
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; font-size: 12px; color: var(--text-primary); box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    opacity: 0; transition: opacity .1s; z-index: 10; white-space: nowrap;
+  }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 14px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--text-muted); }
+  .field select, .field input {
+    background: var(--surface-0); color: var(--text-primary); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 9px; font-size: 13px; min-width: 140px;
+  }
+  .field select:focus, .field input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .checks { display: flex; gap: 10px; }
+  .checks label { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-secondary); }
+  .spacer { flex: 1; }
+  button.primary {
+    background: var(--series-spotio); color: white; border: none; border-radius: 6px;
+    padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  button.ghost {
+    background: transparent; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 6px;
+    padding: 9px 14px; font-size: 13px; cursor: pointer;
+  }
+
+  .table-wrap { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { text-align: left; padding: 10px 12px; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+  tbody tr:last-child td { border-bottom: none; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .tag.spotio { background: color-mix(in srgb, var(--series-spotio) 15%, transparent); color: var(--series-spotio); }
+  .tag.mmc { background: color-mix(in srgb, var(--series-mmc) 15%, transparent); color: var(--series-mmc); }
+
+  .pager { display: flex; align-items: center; gap: 10px; padding: 12px; font-size: 13px; color: var(--text-secondary); }
+  .pager button { background: var(--surface-2); border: 1px solid var(--border); color: var(--text-secondary); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  .pager button:disabled { opacity: .4; cursor: default; }
+
+  .loading { padding: 60px 0; text-align: center; color: var(--text-muted); font-size: 14px; }
+
+  @media (max-width: 900px) {
+    .stat-row { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="viz-root" data-palette="#2a78d6,#eb6834,#1baf7a,#eda100,#e87ba4,#008300,#4a3aa7,#e34948">
+
+  <div class="header">
+    <div>
+      <h1>Field Visit History</h1>
+      <p class="subtitle">SPOTIO (2022–2026) + MMC (2026–present) · combined, rep-level, searchable</p>
+    </div>
+    <button class="theme-toggle" id="themeToggle">Dark mode</button>
+  </div>
+
+  <div id="loadingMsg" class="loading">Loading 204,583 visit records…</div>
+
+  <div id="app" style="display:none">
+
+    <div class="stat-row" id="statRow"></div>
+
+    <div class="chart-section">
+      <p class="chart-title">Visits per month</p>
+      <p class="chart-sub">SPOTIO era vs. MMC era, stacked</p>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--series-spotio)"></span>SPOTIO</span>
+        <span><span class="swatch" style="background:var(--series-mmc)"></span>MMC</span>
+      </div>
+      <div style="position:relative">
+        <svg id="monthChart" width="100%" height="220" viewBox="0 0 1200 220" preserveAspectRatio="none"></svg>
+        <div class="tooltip" id="monthTooltip"></div>
+      </div>
+    </div>
+
+    <div class="chart-section">
+      <p class="chart-title">Visits by rep</p>
+      <p class="chart-sub">Top 20 by total visits (current filters applied)</p>
+      <div style="position:relative">
+        <svg id="repChart" width="100%" height="420" viewBox="0 0 1200 420" preserveAspectRatio="none"></svg>
+        <div class="tooltip" id="repTooltip"></div>
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="field">
+        <label for="fRep">Rep</label>
+        <select id="fRep"><option value="">All reps</option></select>
+      </div>
+      <div class="field">
+        <label for="fTerr">Territory</label>
+        <select id="fTerr"><option value="">All territories</option></select>
+      </div>
+      <div class="field">
+        <label for="fCompany">Office name contains</label>
+        <input type="text" id="fCompany" placeholder="e.g. Smile Dental">
+      </div>
+      <div class="field">
+        <label for="fFrom">From</label>
+        <input type="date" id="fFrom">
+      </div>
+      <div class="field">
+        <label for="fTo">To</label>
+        <input type="date" id="fTo">
+      </div>
+      <div class="field">
+        <label>Source</label>
+        <div class="checks">
+          <label><input type="checkbox" id="fSpotio" checked> SPOTIO</label>
+          <label><input type="checkbox" id="fMmc" checked> MMC</label>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <button class="ghost" id="clearFilters">Clear filters</button>
+      <button class="primary" id="exportBtn">Export CSV</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Rep</th><th>Office</th><th>Territory</th><th>Result</th><th>Source</th></tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="pager">
+        <span id="pagerInfo"></span>
+        <div class="spacer"></div>
+        <button id="prevPage">&larr; Prev</button>
+        <button id="nextPage">Next &rarr;</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  const PAGE_SIZE = 100;
+  let DATA = null;
+  let filtered = [];
+  let page = 0;
+
+  // ---- theme toggle ----
+  const root = document.documentElement;
+  const toggleBtn = document.getElementById('themeToggle');
+  function applyTheme(t) {
+    if (t) root.setAttribute('data-theme', t); else root.removeAttribute('data-theme');
+    toggleBtn.textContent = (t === 'dark') ? 'Light mode' : 'Dark mode';
+  }
+  toggleBtn.addEventListener('click', () => {
+    const cur = root.getAttribute('data-theme');
+    applyTheme(cur === 'dark' ? 'light' : 'dark');
+  });
+
+  fetch('visit_history_data.json')
+    .then(r => r.json())
+    .then(d => { DATA = d; init(); })
+    .catch(e => {
+      document.getElementById('loadingMsg').textContent = 'Failed to load visit data: ' + e;
+    });
+
+  function init() {
+    document.getElementById('loadingMsg').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+
+    // populate filter dropdowns
+    const repSel = document.getElementById('fRep');
+    DATA.reps.slice().sort().forEach(r => {
+      const o = document.createElement('option'); o.value = r; o.textContent = r; repSel.appendChild(o);
+    });
+    const terrSel = document.getElementById('fTerr');
+    DATA.territories.slice().sort().forEach(t => {
+      const o = document.createElement('option'); o.value = t; o.textContent = t; terrSel.appendChild(o);
+    });
+
+    ['fRep','fTerr','fFrom','fTo','fSpotio','fMmc'].forEach(id =>
+      document.getElementById(id).addEventListener('change', () => { page = 0; applyFilters(); }));
+    document.getElementById('fCompany').addEventListener('input', debounce(() => { page = 0; applyFilters(); }, 200));
+    document.getElementById('clearFilters').addEventListener('click', clearFilters);
+    document.getElementById('exportBtn').addEventListener('click', exportCsv);
+    document.getElementById('prevPage').addEventListener('click', () => { if (page > 0) { page--; renderTable(); } });
+    document.getElementById('nextPage').addEventListener('click', () => {
+      if ((page + 1) * PAGE_SIZE < filtered.length) { page++; renderTable(); }
+    });
+
+    applyFilters();
+  }
+
+  function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+  function clearFilters() {
+    document.getElementById('fRep').value = '';
+    document.getElementById('fTerr').value = '';
+    document.getElementById('fCompany').value = '';
+    document.getElementById('fFrom').value = '';
+    document.getElementById('fTo').value = '';
+    document.getElementById('fSpotio').checked = true;
+    document.getElementById('fMmc').checked = true;
+    page = 0;
+    applyFilters();
+  }
+
+  function applyFilters() {
+    const repVal = document.getElementById('fRep').value;
+    const terrVal = document.getElementById('fTerr').value;
+    const companyVal = document.getElementById('fCompany').value.trim().toLowerCase();
+    const fromVal = document.getElementById('fFrom').value;
+    const toVal = document.getElementById('fTo').value;
+    const showSpotio = document.getElementById('fSpotio').checked;
+    const showMmc = document.getElementById('fMmc').checked;
+
+    const repIdx = repVal ? DATA.reps.indexOf(repVal) : -1;
+    const terrIdx = terrVal ? DATA.territories.indexOf(terrVal) : -1;
+
+    filtered = DATA.rows.filter(r => {
+      const [date, rep, company, terr, result, source] = r;
+      if (repIdx >= 0 && rep !== repIdx) return false;
+      if (terrIdx >= 0 && terr !== terrIdx) return false;
+      if (source === 0 && !showSpotio) return false;
+      if (source === 1 && !showMmc) return false;
+      if (fromVal && date < fromVal) return false;
+      if (toVal && date > toVal) return false;
+      if (companyVal && !DATA.companies[company].toLowerCase().includes(companyVal)) return false;
+      return true;
+    });
+
+    renderStats();
+    renderMonthChart();
+    renderRepChart();
+    renderTable();
+  }
+
+  function renderStats() {
+    const total = filtered.length;
+    const spotio = filtered.filter(r => r[5] === 0).length;
+    const mmc = total - spotio;
+    const offices = new Set(filtered.map(r => r[2])).size;
+    const dates = filtered.map(r => r[0]);
+    const range = dates.length ? `${dates[0]} → ${dates[dates.length-1]}` : '—';
+
+    const tiles = [
+      ['Total visits', total.toLocaleString(), ''],
+      ['SPOTIO era', spotio.toLocaleString(), 'spotio'],
+      ['MMC era', mmc.toLocaleString(), 'mmc'],
+      ['Distinct offices', offices.toLocaleString(), ''],
+      ['Date range', range, ''],
+    ];
+    document.getElementById('statRow').innerHTML = tiles.map(([label, value, cls]) =>
+      `<div class="stat-tile"><div class="label">${label}</div><div class="value ${cls}">${value}</div></div>`
+    ).join('');
+  }
+
+  function renderMonthChart() {
+    const svg = document.getElementById('monthChart');
+    const tooltip = document.getElementById('monthTooltip');
+    const W = 1200, H = 220, padL = 40, padB = 24, padT = 10;
+
+    const byMonth = {};
+    filtered.forEach(r => {
+      const m = r[0].slice(0, 7);
+      if (!byMonth[m]) byMonth[m] = { spotio: 0, mmc: 0 };
+      if (r[5] === 0) byMonth[m].spotio++; else byMonth[m].mmc++;
+    });
+    const months = Object.keys(byMonth).sort();
+    if (!months.length) { svg.innerHTML = ''; return; }
+
+    const maxTotal = Math.max(...months.map(m => byMonth[m].spotio + byMonth[m].mmc));
+    const plotW = W - padL - 10, plotH = H - padT - padB;
+    const bw = Math.max(1, plotW / months.length - 2);
+
+    let svgHtml = '';
+    // gridlines
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + plotH * (1 - i / 4);
+      svgHtml += `<line class="gridline" x1="${padL}" y1="${y}" x2="${W-10}" y2="${y}"/>`;
+      svgHtml += `<text x="4" y="${y+3}">${Math.round(maxTotal * i / 4).toLocaleString()}</text>`;
+    }
+
+    months.forEach((m, i) => {
+      const x = padL + i * (plotW / months.length) + 1;
+      const d = byMonth[m];
+      const spotioH = (d.spotio / maxTotal) * plotH;
+      const mmcH = (d.mmc / maxTotal) * plotH;
+      const yBase = padT + plotH;
+      svgHtml += `<rect class="bar-spotio hover-target" data-m="${m}" data-s="${d.spotio}" data-k="${d.mmc}" x="${x}" y="${yBase - spotioH}" width="${bw}" height="${spotioH}"/>`;
+      svgHtml += `<rect class="bar-mmc hover-target" data-m="${m}" data-s="${d.spotio}" data-k="${d.mmc}" x="${x}" y="${yBase - spotioH - mmcH}" width="${bw}" height="${mmcH}"/>`;
+      if (i % Math.ceil(months.length / 14) === 0) {
+        svgHtml += `<text x="${x}" y="${H-6}" font-size="10">${m}</text>`;
+      }
+    });
+    svg.innerHTML = svgHtml;
+
+    svg.querySelectorAll('.hover-target').forEach(el => {
+      el.addEventListener('mousemove', e => {
+        const rect = svg.getBoundingClientRect();
+        tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+        tooltip.style.top = (e.clientY - rect.top + 12) + 'px';
+        tooltip.style.opacity = 1;
+        tooltip.innerHTML = `<strong>${el.dataset.m}</strong><br>SPOTIO: ${Number(el.dataset.s).toLocaleString()}<br>MMC: ${Number(el.dataset.k).toLocaleString()}`;
+      });
+      el.addEventListener('mouseleave', () => tooltip.style.opacity = 0);
+    });
+  }
+
+  function renderRepChart() {
+    const svg = document.getElementById('repChart');
+    const tooltip = document.getElementById('repTooltip');
+    const W = 1200, H = 420, padL = 160, padR = 60, padT = 10, padB = 10;
+
+    const byRep = {};
+    filtered.forEach(r => {
+      const rep = DATA.reps[r[1]];
+      byRep[rep] = (byRep[rep] || 0) + 1;
+    });
+    const top = Object.entries(byRep).sort((a,b) => b[1]-a[1]).slice(0, 20);
+    if (!top.length) { svg.innerHTML = ''; return; }
+    const maxV = top[0][1];
+    const rowH = (H - padT - padB) / top.length;
+    const plotW = W - padL - padR;
+
+    let svgHtml = '';
+    top.forEach(([rep, count], i) => {
+      const y = padT + i * rowH + rowH * 0.2;
+      const bh = rowH * 0.6;
+      const bw = (count / maxV) * plotW;
+      svgHtml += `<text x="${padL - 8}" y="${y + bh/2 + 4}" text-anchor="end">${rep}</text>`;
+      svgHtml += `<rect class="bar-spotio hover-target" data-rep="${rep}" data-c="${count}" x="${padL}" y="${y}" width="${bw}" height="${bh}" rx="3"/>`;
+      svgHtml += `<text x="${padL + bw + 6}" y="${y + bh/2 + 4}" fill="var(--text-secondary)">${count.toLocaleString()}</text>`;
+    });
+    svg.innerHTML = svgHtml;
+
+    svg.querySelectorAll('.hover-target').forEach(el => {
+      el.addEventListener('mousemove', e => {
+        const rect = svg.getBoundingClientRect();
+        tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+        tooltip.style.top = (e.clientY - rect.top + 12) + 'px';
+        tooltip.style.opacity = 1;
+        tooltip.innerHTML = `<strong>${el.dataset.rep}</strong><br>${Number(el.dataset.c).toLocaleString()} visits`;
+      });
+      el.addEventListener('mouseleave', () => tooltip.style.opacity = 0);
+    });
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('tbody');
+    const start = page * PAGE_SIZE;
+    const slice = filtered.slice(start, start + PAGE_SIZE);
+    tbody.innerHTML = slice.map(r => {
+      const [date, rep, company, terr, result, source] = r;
+      const srcLabel = source === 0 ? 'SPOTIO' : 'MMC';
+      const srcClass = source === 0 ? 'spotio' : 'mmc';
+      return `<tr>
+        <td>${date}</td>
+        <td>${DATA.reps[rep]}</td>
+        <td>${DATA.companies[company]}</td>
+        <td>${DATA.territories[terr]}</td>
+        <td>${DATA.results[result]}</td>
+        <td><span class="tag ${srcClass}">${srcLabel}</span></td>
+      </tr>`;
+    }).join('');
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    document.getElementById('pagerInfo').textContent =
+      `${filtered.length.toLocaleString()} visits · page ${page+1} of ${totalPages}`;
+    document.getElementById('prevPage').disabled = page === 0;
+    document.getElementById('nextPage').disabled = (page + 1) * PAGE_SIZE >= filtered.length;
+  }
+
+  function exportCsv() {
+    const header = ['Date', 'Rep', 'Office', 'Territory', 'Result', 'Source'];
+    const lines = [header.join(',')];
+    filtered.forEach(r => {
+      const [date, rep, company, terr, result, source] = r;
+      const row = [date, DATA.reps[rep], DATA.companies[company], DATA.territories[terr], DATA.results[result], source === 0 ? 'SPOTIO' : 'MMC']
+        .map(v => `"${String(v).replace(/"/g, '""')}"`);
+      lines.push(row.join(','));
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `visit_history_export_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+})();
+</script>
+</body>
+</html>
