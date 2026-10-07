@@ -41,9 +41,22 @@ if MK_SRC.exists():
     EXCLUDE_SLUGS = {"visit_history"}  # cross-rep tools, not individual marketer reports
     # Reports that load a sibling data file at runtime (e.g. visit_history's
     # fetch('visit_history_data.json')) need that file copied too -- *.html
-    # alone silently drops it, which 404s at runtime instead of failing the build.
+    # alone silently drops it, which 404s at runtime instead of failing the
+    # build. Frozen *_base.json source files aren't meant to be served
+    # directly (build_visit_history.py reads one and writes the real data
+    # file straight into out/), so they're excluded here.
     for f in sorted(MK_SRC.glob("*.json")):
+        if f.stem.endswith("_base"):
+            continue
         shutil.copy(f, MK_OUT / f.name)
+    # Defensive fallback: if build_visit_history.py didn't run or failed, the
+    # live data file won't exist yet -- fall back to the frozen SPOTIO-only
+    # base rather than letting the report 404 on its own data.
+    live_data = MK_OUT / "visit_history_data.json"
+    base_data = MK_SRC / "visit_history_base.json"
+    if not live_data.exists() and base_data.exists():
+        shutil.copy(base_data, live_data)
+        print("  ! visit_history_data.json missing -- used frozen base as fallback")
     for f in sorted(MK_SRC.glob("*.html")):
         slug = f.stem
         shutil.copy(f, MK_OUT / f.name)
@@ -183,3 +196,13 @@ footer {{ margin-top: 40px; text-align: center; color: #a0aec0; font-size: 12px;
 print(f"  ✓ index.html")
 print(f"  ✓ {len(archived)} archived report(s) staged in out/archive/")
 print(f"  ✓ {len(marketers)} marketer report(s) staged in out/marketer_reports/")
+
+# Cloudflare Pages caches static assets by default. visit_history_data.json
+# is rebuilt nightly, so a cached copy would silently show stale data --
+# force revalidation on every load instead.
+(OUT_DIR / "_headers").write_text(
+    "/marketer_reports/visit_history_data.json\n"
+    "  Cache-Control: no-cache, must-revalidate\n",
+    encoding="utf-8",
+)
+print(f"  ✓ _headers")
