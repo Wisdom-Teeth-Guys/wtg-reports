@@ -248,9 +248,18 @@
     applyTheme(cur === 'dark' ? 'light' : 'dark');
   });
 
-  fetch('visit_history_data.json')
-    .then(r => r.json())
-    .then(d => { DATA = d; init(); })
+  Promise.all([
+    fetch('visit_history_data.json').then(r => r.json()),
+    fetch('visit_history_notes.json').then(r => r.json()),
+  ])
+    .then(([d, notes]) => {
+      // Notes ship as a separate file (Cloudflare Pages rejects files over
+      // 25 MiB; combined with notes text this dataset no longer fits in one)
+      // index-aligned with d.rows -- zip them back into a 7th row element.
+      d.rows = d.rows.map((r, i) => [...r, notes[i] || '']);
+      DATA = d;
+      init();
+    })
     .catch(e => {
       document.getElementById('loadingMsg').textContent = 'Failed to load visit data: ' + e;
     });
