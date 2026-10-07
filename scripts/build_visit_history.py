@@ -26,8 +26,13 @@ import requests
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASE_FILE = REPO_ROOT / "marketer_reports" / "visit_history_base.json"
+BASE_NOTES_FILE = REPO_ROOT / "marketer_reports" / "visit_history_base_notes.json"
 OUT_DIR = REPO_ROOT / "out" / "marketer_reports"
 OUT_FILE = OUT_DIR / "visit_history_data.json"
+OUT_NOTES_FILE = OUT_DIR / "visit_history_notes.json"
+# Cloudflare Pages rejects any single file over 25 MiB. Notes text alone
+# pushes a combined file well past that, so it ships as a second file,
+# index-aligned with OUT_FILE's rows (same order, zero gaps).
 
 HS_BASE = "https://api.hubapi.com"
 TOKEN = os.environ["HUBSPOT_TOKEN"]
@@ -156,7 +161,9 @@ def main():
     companies_list = list(base["companies"])
     addresses = list(base["addresses"])
     zips = list(base["zips"])
-    rows = [list(r) for r in base["rows"]]
+    base_notes = json.loads(BASE_NOTES_FILE.read_text())
+    # Keep each row paired with its note so a later sort can't desync them.
+    rows = [list(r) + [n] for r, n in zip(base["rows"], base_notes)]
 
     rep_idx_map = {v: i for i, v in enumerate(reps)}
     terr_idx_map = {v: i for i, v in enumerate(territories)}
@@ -217,17 +224,22 @@ def main():
         rows.append(row)
         added += 1
 
-    rows.sort(key=lambda r: r[0])
+    rows.sort(key=lambda r: r[0])  # each row still ends with its note -- stays paired through the sort
     print(f"  added {added:,} MMC rows (skipped {skipped_future} future-dated)")
+
+    notes_only = [r[6] for r in rows]
+    rows_no_notes = [r[:6] for r in rows]
 
     out = {
         "reps": reps, "territories": territories, "results": results,
         "companies": companies_list, "addresses": addresses, "zips": zips,
-        "sources": ["SPOTIO", "MMC"], "rows": rows,
+        "sources": ["SPOTIO", "MMC"], "rows": rows_no_notes,
     }
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     OUT_FILE.write_text(json.dumps(out, separators=(",", ":")))
+    OUT_NOTES_FILE.write_text(json.dumps(notes_only, separators=(",", ":")))
     print(f"wrote {OUT_FILE} ({OUT_FILE.stat().st_size / 1024 / 1024:.1f} MB, {len(rows):,} rows)")
+    print(f"wrote {OUT_NOTES_FILE} ({OUT_NOTES_FILE.stat().st_size / 1024 / 1024:.1f} MB)")
 
 
 if __name__ == "__main__":

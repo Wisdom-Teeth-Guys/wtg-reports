@@ -46,17 +46,21 @@ if MK_SRC.exists():
     # directly (build_visit_history.py reads one and writes the real data
     # file straight into out/), so they're excluded here.
     for f in sorted(MK_SRC.glob("*.json")):
-        if f.stem.endswith("_base"):
+        if "_base" in f.stem:
             continue
         shutil.copy(f, MK_OUT / f.name)
     # Defensive fallback: if build_visit_history.py didn't run or failed, the
-    # live data file won't exist yet -- fall back to the frozen SPOTIO-only
+    # live data files won't exist yet -- fall back to the frozen SPOTIO-only
     # base rather than letting the report 404 on its own data.
-    live_data = MK_OUT / "visit_history_data.json"
-    base_data = MK_SRC / "visit_history_base.json"
-    if not live_data.exists() and base_data.exists():
-        shutil.copy(base_data, live_data)
-        print("  ! visit_history_data.json missing -- used frozen base as fallback")
+    for live_name, base_name in [
+        ("visit_history_data.json", "visit_history_base.json"),
+        ("visit_history_notes.json", "visit_history_base_notes.json"),
+    ]:
+        live_path = MK_OUT / live_name
+        base_path = MK_SRC / base_name
+        if not live_path.exists() and base_path.exists():
+            shutil.copy(base_path, live_path)
+            print(f"  ! {live_name} missing -- used frozen base as fallback")
     for f in sorted(MK_SRC.glob("*.html")):
         slug = f.stem
         shutil.copy(f, MK_OUT / f.name)
@@ -202,6 +206,8 @@ print(f"  ✓ {len(marketers)} marketer report(s) staged in out/marketer_reports
 # force revalidation on every load instead.
 (OUT_DIR / "_headers").write_text(
     "/marketer_reports/visit_history_data.json\n"
+    "  Cache-Control: no-cache, must-revalidate\n"
+    "/marketer_reports/visit_history_notes.json\n"
     "  Cache-Control: no-cache, must-revalidate\n",
     encoding="utf-8",
 )
