@@ -94,7 +94,7 @@ def fetch_mmc_meetings():
     while True:
         body = {
             "limit": 100,
-            "properties": ["hs_meeting_start_time", "hs_meeting_title", "hubspot_owner_id"],
+            "properties": ["hs_meeting_start_time", "hs_meeting_title", "hubspot_owner_id", "hs_meeting_body"],
             "filterGroups": [{"filters": [
                 {"propertyName": "hs_object_source_id", "operator": "EQ", "value": MMC_SOURCE_ID},
                 {"propertyName": "hs_meeting_start_time", "operator": "GTE", "value": since_ms},
@@ -201,6 +201,7 @@ def main():
             get_or_add(territories, terr_idx_map, terr),
             get_or_add(results, result_idx_map, "MMC Check-in"),
             1,  # source: MMC
+            (p.get("hs_meeting_body") or "").strip(),
         ]
         rows.append(row)
         added += 1

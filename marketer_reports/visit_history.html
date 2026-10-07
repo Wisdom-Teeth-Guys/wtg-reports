@@ -111,7 +111,8 @@
   }
 
   .table-wrap { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  .notes-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
   thead th { text-align: left; padding: 10px 12px; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--border); background: var(--surface-2); }
   tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
   tbody tr:last-child td { border-bottom: none; }
@@ -187,6 +188,10 @@
         <input type="text" id="fZip" placeholder="e.g. 75201" style="min-width:90px">
       </div>
       <div class="field">
+        <label for="fNotes">Notes contain</label>
+        <input type="text" id="fNotes" placeholder="e.g. boo basket">
+      </div>
+      <div class="field">
         <label for="fFrom">From</label>
         <input type="date" id="fFrom">
       </div>
@@ -209,7 +214,7 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Date</th><th>Rep</th><th>Office</th><th>Address</th><th>Zip</th><th>Territory</th><th>Result</th><th>Source</th></tr>
+          <tr><th>Date</th><th>Rep</th><th>Office</th><th>Address</th><th>Zip</th><th>Territory</th><th>Result</th><th>Notes</th><th>Source</th></tr>
         </thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -268,6 +273,7 @@
       document.getElementById(id).addEventListener('change', () => { page = 0; applyFilters(); }));
     document.getElementById('fCompany').addEventListener('input', debounce(() => { page = 0; applyFilters(); }, 200));
     document.getElementById('fZip').addEventListener('input', debounce(() => { page = 0; applyFilters(); }, 200));
+    document.getElementById('fNotes').addEventListener('input', debounce(() => { page = 0; applyFilters(); }, 200));
     document.getElementById('clearFilters').addEventListener('click', clearFilters);
     document.getElementById('exportBtn').addEventListener('click', exportCsv);
     document.getElementById('prevPage').addEventListener('click', () => { if (page > 0) { page--; renderTable(); } });
@@ -280,11 +286,15 @@
 
   function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
+  const escapeDiv = document.createElement('div');
+  function escapeHtml(s) { escapeDiv.textContent = s; return escapeDiv.innerHTML; }
+
   function clearFilters() {
     document.getElementById('fRep').value = '';
     document.getElementById('fTerr').value = '';
     document.getElementById('fCompany').value = '';
     document.getElementById('fZip').value = '';
+    document.getElementById('fNotes').value = '';
     document.getElementById('fFrom').value = '';
     document.getElementById('fTo').value = '';
     document.getElementById('fSpotio').checked = true;
@@ -298,6 +308,7 @@
     const terrVal = document.getElementById('fTerr').value;
     const companyVal = document.getElementById('fCompany').value.trim().toLowerCase();
     const zipVal = document.getElementById('fZip').value.trim();
+    const notesVal = document.getElementById('fNotes').value.trim().toLowerCase();
     const fromVal = document.getElementById('fFrom').value;
     const toVal = document.getElementById('fTo').value;
     const showSpotio = document.getElementById('fSpotio').checked;
@@ -307,7 +318,7 @@
     const terrIdx = terrVal ? DATA.territories.indexOf(terrVal) : -1;
 
     filtered = DATA.rows.filter(r => {
-      const [date, rep, company, terr, result, source] = r;
+      const [date, rep, company, terr, result, source, notes] = r;
       if (repIdx >= 0 && rep !== repIdx) return false;
       if (terrIdx >= 0 && terr !== terrIdx) return false;
       if (source === 0 && !showSpotio) return false;
@@ -316,6 +327,7 @@
       if (toVal && date > toVal) return false;
       if (companyVal && !DATA.companies[company].toLowerCase().includes(companyVal)) return false;
       if (zipVal && DATA.zips[company] !== zipVal) return false;
+      if (notesVal && !(notes || '').toLowerCase().includes(notesVal)) return false;
       return true;
     });
 
@@ -441,9 +453,10 @@
     const start = page * PAGE_SIZE;
     const slice = filtered.slice(start, start + PAGE_SIZE);
     tbody.innerHTML = slice.map(r => {
-      const [date, rep, company, terr, result, source] = r;
+      const [date, rep, company, terr, result, source, notes] = r;
       const srcLabel = source === 0 ? 'SPOTIO' : 'MMC';
       const srcClass = source === 0 ? 'spotio' : 'mmc';
+      const noteEsc = escapeHtml(notes || '');
       return `<tr>
         <td>${date}</td>
         <td>${DATA.reps[rep]}</td>
@@ -452,6 +465,7 @@
         <td>${DATA.zips[company] || ''}</td>
         <td>${DATA.territories[terr]}</td>
         <td>${DATA.results[result]}</td>
+        <td class="notes-cell" title="${noteEsc}">${noteEsc}</td>
         <td><span class="tag ${srcClass}">${srcLabel}</span></td>
       </tr>`;
     }).join('');
@@ -464,11 +478,11 @@
   }
 
   function exportCsv() {
-    const header = ['Date', 'Rep', 'Office', 'Address', 'Zip', 'Territory', 'Result', 'Source'];
+    const header = ['Date', 'Rep', 'Office', 'Address', 'Zip', 'Territory', 'Result', 'Notes', 'Source'];
     const lines = [header.join(',')];
     filtered.forEach(r => {
-      const [date, rep, company, terr, result, source] = r;
-      const row = [date, DATA.reps[rep], DATA.companies[company], DATA.addresses[company] || '', DATA.zips[company] || '', DATA.territories[terr], DATA.results[result], source === 0 ? 'SPOTIO' : 'MMC']
+      const [date, rep, company, terr, result, source, notes] = r;
+      const row = [date, DATA.reps[rep], DATA.companies[company], DATA.addresses[company] || '', DATA.zips[company] || '', DATA.territories[terr], DATA.results[result], notes || '', source === 0 ? 'SPOTIO' : 'MMC']
         .map(v => `"${String(v).replace(/"/g, '""')}"`);
       lines.push(row.join(','));
     });
