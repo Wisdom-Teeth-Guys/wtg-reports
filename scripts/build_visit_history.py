@@ -35,6 +35,17 @@ HEADERS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json
 MMC_SOURCE_ID = "211206"
 CUTOFF = datetime(2026, 9, 18, tzinfo=timezone.utc)
 ZIP_RE = re.compile(r"\b(\d{5})\b")
+# Same patterns phi_scan.py's email/phone rules use -- reps occasionally jot
+# down a referring office's contact info in a check-in note, which the PHI
+# gate (correctly) blocks on. Redact rather than suppress the gate.
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}(?!\d)")
+
+
+def redact_contact_info(text):
+    text = EMAIL_RE.sub("[redacted]", text or "")
+    text = PHONE_RE.sub("[redacted]", text)
+    return text
 
 
 def hs_post(path, body, attempts=5):
@@ -201,7 +212,7 @@ def main():
             get_or_add(territories, terr_idx_map, terr),
             get_or_add(results, result_idx_map, "MMC Check-in"),
             1,  # source: MMC
-            (p.get("hs_meeting_body") or "").strip(),
+            redact_contact_info((p.get("hs_meeting_body") or "").strip()),
         ]
         rows.append(row)
         added += 1
