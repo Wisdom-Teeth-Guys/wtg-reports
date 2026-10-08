@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Field Visit History — SPOTIO + MMC</title>
 <style>
-  .viz-root {
+  /* Declared on :root (not .viz-root) so body -- an ANCESTOR of .viz-root --
+     can actually see these variables too; a child can't hand variables
+     upward to its parent. */
+  :root {
     color-scheme: light;
     --surface-0:      #ffffff;
     --surface-1:      #fcfcfb;
@@ -18,21 +21,9 @@
     --series-mmc:     #eb6834;
     --focus:          #2a78d6;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:where(:not([data-theme="light"])) .viz-root {
-      color-scheme: dark;
-      --surface-0:      #121211;
-      --surface-1:      #1a1a19;
-      --surface-2:      #232321;
-      --border:         #34332f;
-      --text-primary:   #ffffff;
-      --text-secondary: #c3c2b7;
-      --text-muted:     #8b897f;
-      --series-spotio:  #3987e5;
-      --series-mmc:     #d95926;
-    }
-  }
-  :root[data-theme="dark"] .viz-root {
+  /* Defaults to light regardless of OS preference -- only the explicit
+     toggle below switches to dark. */
+  :root[data-theme="dark"] {
     color-scheme: dark;
     --surface-0:      #121211;
     --surface-1:      #1a1a19;
@@ -112,8 +103,11 @@
 
   .table-wrap { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
-  .notes-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
-  thead th { text-align: left; padding: 10px 12px; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+  .notes-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .notes-cell.expanded { max-width: 420px; overflow: visible; text-overflow: clip; white-space: normal; }
+  thead th { text-align: left; padding: 10px 12px; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--border); background: var(--surface-2); cursor: pointer; user-select: none; white-space: nowrap; }
+  thead th:hover { color: var(--text-primary); }
+  thead th .sort-arrow { display: inline-block; width: 10px; margin-left: 2px; color: var(--series-spotio); }
   tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
   tbody tr:last-child td { border-bottom: none; }
   .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
@@ -214,7 +208,17 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Date</th><th>Rep</th><th>Office</th><th>Address</th><th>Zip</th><th>Territory</th><th>Result</th><th>Notes</th><th>Source</th></tr>
+          <tr id="tableHead">
+            <th data-sort="date">Date</th>
+            <th data-sort="rep">Rep</th>
+            <th data-sort="office">Office</th>
+            <th data-sort="address">Address</th>
+            <th data-sort="zip">Zip</th>
+            <th data-sort="territory">Territory</th>
+            <th data-sort="result">Result</th>
+            <th data-sort="notes">Notes</th>
+            <th data-sort="source">Source</th>
+          </tr>
         </thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -235,6 +239,45 @@
   let DATA = null;
   let filtered = [];
   let page = 0;
+  let sortCol = 'date';
+  let sortDir = 1; // 1 = ascending, -1 = descending
+
+  function getSortValue(r, col) {
+    const [date, rep, company, terr, result, source, notes] = r;
+    switch (col) {
+      case 'date': return date;
+      case 'rep': return DATA.reps[rep];
+      case 'office': return DATA.companies[company];
+      case 'address': return DATA.addresses[company] || '';
+      case 'zip': return DATA.zips[company] || '';
+      case 'territory': return DATA.territories[terr];
+      case 'result': return DATA.results[result];
+      case 'notes': return notes || '';
+      case 'source': return source === 0 ? 'SPOTIO' : 'MMC';
+      default: return '';
+    }
+  }
+
+  function applySort() {
+    filtered.sort((a, b) => {
+      const va = getSortValue(a, sortCol), vb = getSortValue(b, sortCol);
+      if (va < vb) return -1 * sortDir;
+      if (va > vb) return 1 * sortDir;
+      return 0;
+    });
+  }
+
+  function updateSortIndicators() {
+    document.querySelectorAll('#tableHead th').forEach(th => {
+      th.querySelector('.sort-arrow')?.remove();
+      if (th.dataset.sort === sortCol) {
+        const arrow = document.createElement('span');
+        arrow.className = 'sort-arrow';
+        arrow.textContent = sortDir === 1 ? '▲' : '▼';
+        th.appendChild(arrow);
+      }
+    });
+  }
 
   // ---- theme toggle ----
   const root = document.documentElement;
@@ -289,6 +332,21 @@
     document.getElementById('nextPage').addEventListener('click', () => {
       if ((page + 1) * PAGE_SIZE < filtered.length) { page++; renderTable(); }
     });
+    document.getElementById('tbody').addEventListener('click', e => {
+      const cell = e.target.closest('.notes-cell');
+      if (cell) cell.classList.toggle('expanded');
+    });
+    document.getElementById('tableHead').addEventListener('click', e => {
+      const th = e.target.closest('th');
+      if (!th) return;
+      const col = th.dataset.sort;
+      if (sortCol === col) { sortDir *= -1; } else { sortCol = col; sortDir = 1; }
+      page = 0;
+      applySort();
+      updateSortIndicators();
+      renderTable();
+    });
+    updateSortIndicators();
 
     applyFilters();
   }
@@ -340,6 +398,7 @@
       return true;
     });
 
+    applySort();
     renderStats();
     renderMonthChart();
     renderRepChart();
@@ -474,7 +533,7 @@
         <td>${DATA.zips[company] || ''}</td>
         <td>${DATA.territories[terr]}</td>
         <td>${DATA.results[result]}</td>
-        <td class="notes-cell" title="${noteEsc}">${noteEsc}</td>
+        <td class="notes-cell" title="Click to expand">${noteEsc}</td>
         <td><span class="tag ${srcClass}">${srcLabel}</span></td>
       </tr>`;
     }).join('');
