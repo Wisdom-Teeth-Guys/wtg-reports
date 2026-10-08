@@ -14,6 +14,7 @@ office) along the way.
 
 Requires HUBSPOT_TOKEN in the environment.
 """
+import html
 import json
 import os
 import re
@@ -39,6 +40,11 @@ TOKEN = os.environ["HUBSPOT_TOKEN"]
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
 MMC_SOURCE_ID = "211206"
 CUTOFF = datetime(2026, 9, 18, tzinfo=timezone.utc)
+# hs_meeting_outcome's enum includes real pitch results (FULL PITCH - LEFT
+# CARDS, LEFT TREATS, ...) alongside generic HubSpot meeting-lifecycle
+# states that aren't an outcome at all -- most MMC check-ins only ever get
+# the generic COMPLETED, since reps rarely pick a specific result.
+GENERIC_MEETING_STATES = {"SCHEDULED", "NO_SHOW", "CANCELED", "RESCHEDULED", "COMPLETED"}
 ZIP_RE = re.compile(r"\b(\d{5})\b")
 # Same patterns phi_scan.py's email/phone rules use -- reps occasionally jot
 # down a referring office's contact info in a check-in note, which the PHI
@@ -48,7 +54,11 @@ PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}
 
 
 def redact_contact_info(text):
-    text = EMAIL_RE.sub("[redacted]", text or "")
+    # MMC stores note text with HTML entities already encoded (&amp; for &,
+    # etc.) -- unescape first so the report's own HTML-escaping on render
+    # doesn't double-encode it into literal "&amp;" on screen.
+    text = html.unescape(text or "")
+    text = EMAIL_RE.sub("[redacted]", text)
     text = PHONE_RE.sub("[redacted]", text)
     return text
 
@@ -110,7 +120,7 @@ def fetch_mmc_meetings():
     while True:
         body = {
             "limit": 100,
-            "properties": ["hs_meeting_start_time", "hs_meeting_title", "hubspot_owner_id", "hs_meeting_body"],
+            "properties": ["hs_meeting_start_time", "hs_meeting_title", "hubspot_owner_id", "hs_meeting_body", "hs_meeting_outcome"],
             "filterGroups": [{"filters": [
                 {"propertyName": "hs_object_source_id", "operator": "EQ", "value": MMC_SOURCE_ID},
                 {"propertyName": "hs_meeting_start_time", "operator": "GTE", "value": since_ms},
@@ -137,6 +147,47 @@ def batch_meeting_company_assoc(meeting_ids):
             if tos:
                 m2c[str(row["from"]["id"])] = str(tos[0]["toObjectId"])
     return m2c
+
+
+def fetch_stray_mmc_notes():
+    """Notes logged in MMC's own "Notes" feature (as opposed to attached to a
+    check-in) sync to HubSpot as plain Note objects under the same MMC
+    source id, with no link to the Meeting for that visit. Some reps
+    (confirmed: Clarissa Hall) are using this instead of the check-in's own
+    note field, so the visit shows up with real check-in data but no text.
+    Pulled separately and matched to a Meeting by (company, date) below."""
+    since_ms = int(CUTOFF.timestamp() * 1000)
+    notes, after = [], None
+    while True:
+        body = {
+            "limit": 100,
+            "properties": ["hs_note_body", "hs_timestamp"],
+            "filterGroups": [{"filters": [
+                {"propertyName": "hs_object_source_id", "operator": "EQ", "value": MMC_SOURCE_ID},
+                {"propertyName": "hs_timestamp", "operator": "GTE", "value": since_ms},
+            ]}],
+        }
+        if after:
+            body["after"] = after
+        r = hs_post("/crm/v3/objects/notes/search", body)
+        notes.extend(r.get("results", []))
+        after = (r.get("paging", {}) or {}).get("next", {}).get("after")
+        if not after:
+            break
+    return notes
+
+
+def batch_note_company_assoc(note_ids):
+    n2c = {}
+    for i in range(0, len(note_ids), 100):
+        batch = note_ids[i:i + 100]
+        rr = hs_post("/crm/v4/associations/notes/companies/batch/read",
+                     {"inputs": [{"id": x} for x in batch]})
+        for row in rr.get("results", []):
+            tos = row.get("to", [])
+            if tos:
+                n2c[str(row["from"]["id"])] = str(tos[0]["toObjectId"])
+    return n2c
 
 
 def batch_companies(company_ids):
@@ -184,10 +235,26 @@ def main():
     print(f"  {len(meetings):,} meetings")
 
     m2c = batch_meeting_company_assoc([m["id"] for m in meetings])
-    companies = batch_companies(m2c.values())
+
+    print("fetching stray MMC notes (logged in MMC's Notes tab, not the check-in itself)...")
+    stray_notes = fetch_stray_mmc_notes()
+    n2c = batch_note_company_assoc([n["id"] for n in stray_notes])
+    stray_by_key = {}  # (company_id, date_str) -> [note bodies]
+    for n in stray_notes:
+        nid = n["id"]
+        cid = n2c.get(nid)
+        ts = n["properties"].get("hs_timestamp")
+        body_text = (n["properties"].get("hs_note_body") or "").strip()
+        if not (cid and ts and body_text):
+            continue
+        key = (cid, parse_ts(ts).date().isoformat())
+        stray_by_key.setdefault(key, []).append(body_text)
+    print(f"  {len(stray_notes):,} stray notes, {len(stray_by_key):,} distinct (company, date) keys")
+
+    companies = batch_companies(set(m2c.values()) | {k[0] for k in stray_by_key})
 
     now = datetime.now(timezone.utc)
-    added, skipped_future = 0, 0
+    added, skipped_future, filled_from_stray, with_real_outcome = 0, 0, 0, 0
     for m in meetings:
         p = m["properties"]
         cid = m2c.get(m["id"])
@@ -212,20 +279,34 @@ def main():
             addresses.append(addr)
             zips.append(z[-1] if z else "")
 
+        note_text = (p.get("hs_meeting_body") or "").strip()
+        if not note_text and cid:
+            stray = stray_by_key.get((cid, date))
+            if stray:
+                note_text = "; ".join(stray)
+                filled_from_stray += 1
+
+        outcome = (p.get("hs_meeting_outcome") or "").strip().upper()
+        result_label = outcome.title() if outcome and outcome not in GENERIC_MEETING_STATES else "Completed"
+        if result_label != "Completed":
+            with_real_outcome += 1
+
         row = [
             date,
             get_or_add(reps, rep_idx_map, rep),
             company_i,
             get_or_add(territories, terr_idx_map, terr),
-            get_or_add(results, result_idx_map, "MMC Check-in"),
+            get_or_add(results, result_idx_map, result_label),
             1,  # source: MMC
-            redact_contact_info((p.get("hs_meeting_body") or "").strip()),
+            redact_contact_info(note_text),
         ]
         rows.append(row)
         added += 1
 
     rows.sort(key=lambda r: r[0])  # each row still ends with its note -- stays paired through the sort
-    print(f"  added {added:,} MMC rows (skipped {skipped_future} future-dated)")
+    print(f"  added {added:,} MMC rows (skipped {skipped_future} future-dated, "
+          f"{filled_from_stray:,} notes filled in from MMC's Notes tab, "
+          f"{with_real_outcome:,} with a real pitch outcome vs. generic 'Completed')")
 
     notes_only = [r[6] for r in rows]
     rows_no_notes = [r[:6] for r in rows]
