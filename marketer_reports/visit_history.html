@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Field Visit History — SPOTIO + MMC</title>
 <style>
-  .viz-root {
+  /* Declared on :root (not .viz-root) so body -- an ANCESTOR of .viz-root --
+     can actually see these variables too; a child can't hand variables
+     upward to its parent. */
+  :root {
     color-scheme: light;
     --surface-0:      #ffffff;
     --surface-1:      #fcfcfb;
@@ -18,21 +21,9 @@
     --series-mmc:     #eb6834;
     --focus:          #2a78d6;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:where(:not([data-theme="light"])) .viz-root {
-      color-scheme: dark;
-      --surface-0:      #121211;
-      --surface-1:      #1a1a19;
-      --surface-2:      #232321;
-      --border:         #34332f;
-      --text-primary:   #ffffff;
-      --text-secondary: #c3c2b7;
-      --text-muted:     #8b897f;
-      --series-spotio:  #3987e5;
-      --series-mmc:     #d95926;
-    }
-  }
-  :root[data-theme="dark"] .viz-root {
+  /* Defaults to light regardless of OS preference -- only the explicit
+     toggle below switches to dark. */
+  :root[data-theme="dark"] {
     color-scheme: dark;
     --surface-0:      #121211;
     --surface-1:      #1a1a19;
