@@ -112,7 +112,8 @@
 
   .table-wrap { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
-  .notes-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
+  .notes-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .notes-cell.expanded { max-width: 420px; overflow: visible; text-overflow: clip; white-space: normal; }
   thead th { text-align: left; padding: 10px 12px; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--border); background: var(--surface-2); }
   tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
   tbody tr:last-child td { border-bottom: none; }
@@ -288,6 +289,10 @@
     document.getElementById('prevPage').addEventListener('click', () => { if (page > 0) { page--; renderTable(); } });
     document.getElementById('nextPage').addEventListener('click', () => {
       if ((page + 1) * PAGE_SIZE < filtered.length) { page++; renderTable(); }
+    });
+    document.getElementById('tbody').addEventListener('click', e => {
+      const cell = e.target.closest('.notes-cell');
+      if (cell) cell.classList.toggle('expanded');
     });
 
     applyFilters();
@@ -474,7 +479,7 @@
         <td>${DATA.zips[company] || ''}</td>
         <td>${DATA.territories[terr]}</td>
         <td>${DATA.results[result]}</td>
-        <td class="notes-cell" title="${noteEsc}">${noteEsc}</td>
+        <td class="notes-cell" title="Click to expand">${noteEsc}</td>
         <td><span class="tag ${srcClass}">${srcLabel}</span></td>
       </tr>`;
     }).join('');
