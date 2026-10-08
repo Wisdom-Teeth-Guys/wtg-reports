@@ -40,6 +40,11 @@ TOKEN = os.environ["HUBSPOT_TOKEN"]
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
 MMC_SOURCE_ID = "211206"
 CUTOFF = datetime(2026, 9, 18, tzinfo=timezone.utc)
+# hs_meeting_outcome's enum includes real pitch results (FULL PITCH - LEFT
+# CARDS, LEFT TREATS, ...) alongside generic HubSpot meeting-lifecycle
+# states that aren't an outcome at all -- most MMC check-ins only ever get
+# the generic COMPLETED, since reps rarely pick a specific result.
+GENERIC_MEETING_STATES = {"SCHEDULED", "NO_SHOW", "CANCELED", "RESCHEDULED", "COMPLETED"}
 ZIP_RE = re.compile(r"\b(\d{5})\b")
 # Same patterns phi_scan.py's email/phone rules use -- reps occasionally jot
 # down a referring office's contact info in a check-in note, which the PHI
@@ -115,7 +120,7 @@ def fetch_mmc_meetings():
     while True:
         body = {
             "limit": 100,
-            "properties": ["hs_meeting_start_time", "hs_meeting_title", "hubspot_owner_id", "hs_meeting_body"],
+            "properties": ["hs_meeting_start_time", "hs_meeting_title", "hubspot_owner_id", "hs_meeting_body", "hs_meeting_outcome"],
             "filterGroups": [{"filters": [
                 {"propertyName": "hs_object_source_id", "operator": "EQ", "value": MMC_SOURCE_ID},
                 {"propertyName": "hs_meeting_start_time", "operator": "GTE", "value": since_ms},
@@ -249,7 +254,7 @@ def main():
     companies = batch_companies(set(m2c.values()) | {k[0] for k in stray_by_key})
 
     now = datetime.now(timezone.utc)
-    added, skipped_future, filled_from_stray = 0, 0, 0
+    added, skipped_future, filled_from_stray, with_real_outcome = 0, 0, 0, 0
     for m in meetings:
         p = m["properties"]
         cid = m2c.get(m["id"])
@@ -281,12 +286,17 @@ def main():
                 note_text = "; ".join(stray)
                 filled_from_stray += 1
 
+        outcome = (p.get("hs_meeting_outcome") or "").strip().upper()
+        result_label = outcome.title() if outcome and outcome not in GENERIC_MEETING_STATES else "Completed"
+        if result_label != "Completed":
+            with_real_outcome += 1
+
         row = [
             date,
             get_or_add(reps, rep_idx_map, rep),
             company_i,
             get_or_add(territories, terr_idx_map, terr),
-            get_or_add(results, result_idx_map, "MMC Check-in"),
+            get_or_add(results, result_idx_map, result_label),
             1,  # source: MMC
             redact_contact_info(note_text),
         ]
@@ -295,7 +305,8 @@ def main():
 
     rows.sort(key=lambda r: r[0])  # each row still ends with its note -- stays paired through the sort
     print(f"  added {added:,} MMC rows (skipped {skipped_future} future-dated, "
-          f"{filled_from_stray:,} notes filled in from MMC's Notes tab)")
+          f"{filled_from_stray:,} notes filled in from MMC's Notes tab, "
+          f"{with_real_outcome:,} with a real pitch outcome vs. generic 'Completed')")
 
     notes_only = [r[6] for r in rows]
     rows_no_notes = [r[:6] for r in rows]
