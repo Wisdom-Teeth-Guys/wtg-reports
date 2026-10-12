@@ -355,7 +355,18 @@ footer { text-align: center; font-size: 11px; color: #9ca3af; padding: 20px; }
     <span style="color:#1e40af;font-weight:600;">CRM columns</span> = live daily sync from HubSpot/Pipedrive: raw Google Ads spend and deals marked Won (a pipeline stage, not a completed surgery).
     <span style="color:#92400e;font-weight:600;">Finance columns</span> = the s8e8 Marketing ROI Report, a hand-compiled monthly snapshot from the practice management system: spend including Adwords management fee, and patients tied to a completed surgery, plus collections. Finance data is <b>not live</b> — it's only as current as the last export Finance shared (<span id="reality-as-of">—</span>) and must be refreshed manually via <code>scripts/update_s8e8_snapshot.py</code>.
   </div>
+  <div class="reality-panel" style="margin-bottom:16px;">
+    <div class="chart-label" style="margin-bottom:8px;">Annual totals — compare full years side by side</div>
+    <table class="reality-table">
+      <thead>
+        <tr class="group-row"><th></th><th colspan="3" class="crm">CRM (HubSpot/Pipedrive, live)</th><th colspan="4" class="fin">Finance (s8e8 report, manual)</th></tr>
+        <tr><th>Year</th><th>Spend</th><th>Won</th><th>CPA</th><th>Spend (w/ mgmt fee)</th><th>Patients (surgery)</th><th>CPA</th><th>Collections</th></tr>
+      </thead>
+      <tbody id="reality-annual-body"></tbody>
+    </table>
+  </div>
   <div class="reality-panel">
+    <div class="chart-label" style="margin-bottom:8px;">Monthly detail — most recent 18 months</div>
     <table class="reality-table">
       <thead>
         <tr class="group-row"><th></th><th colspan="3" class="crm">CRM (HubSpot/Pipedrive, live)</th><th colspan="4" class="fin">Finance (s8e8 report, manual)</th></tr>
@@ -591,6 +602,44 @@ function renderReality(){
   const finance    = m.finance[city]    || {};
 
   const keys = new Set([...Object.keys(crmSpend), ...Object.keys(finance)]);
+
+  // ─── Annual rollup: sum every month into its calendar year, full history ───
+  const years = {};
+  [...keys].forEach(key => {
+    const year = key.slice(0, 4);
+    const y = years[year] || (years[year] = {
+      cSpend: 0, cWon: 0, fSpend: 0, fPatients: 0, fCollections: 0, hasFin: false
+    });
+    y.cSpend += crmSpend[key] || 0;
+    y.cWon   += crmWon[key]   || 0;
+    const fin = finance[key];
+    if (fin) {
+      y.hasFin = true;
+      if (fin.spend != null) y.fSpend += fin.spend;
+      if (fin.patients != null) y.fPatients += fin.patients;
+      if (fin.collections != null) y.fCollections += fin.collections;
+    }
+  });
+  const annualRows = Object.keys(years).sort().reverse().map(year => {
+    const y = years[year];
+    const cCpa = y.cWon > 0 ? y.cSpend / y.cWon : null;
+    const fCpa = (y.hasFin && y.fPatients > 0) ? y.fSpend / y.fPatients : null;
+    const finCells = y.hasFin ? `
+        <td>${fmt$(y.fSpend)}</td>
+        <td>${fmt(y.fPatients)}</td>
+        <td>${fCpa != null ? fmt$(fCpa) : '—'}</td>
+        <td>${fmt$(y.fCollections)}</td>` : `<td class="pending" colspan="4">no finance data this year</td>`;
+    return `<tr>
+      <td>${year}</td>
+      <td>${fmt$(y.cSpend)}</td>
+      <td>${fmt(y.cWon)}</td>
+      <td>${cCpa != null ? fmt$(cCpa) : '—'}</td>
+      ${finCells}
+    </tr>`;
+  });
+  document.getElementById('reality-annual-body').innerHTML = annualRows.join('') ||
+    '<tr><td colspan="8" style="text-align:center;color:#9ca3af;">No data for this city yet.</td></tr>';
+
   const sortedKeys = [...keys].sort().reverse().slice(0, 18); // most recent 18 months
 
   const naCell = () => '<td class="na">—</td>';
