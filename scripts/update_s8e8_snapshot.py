@@ -4,22 +4,22 @@ Refresh the s8e8 Google PPC finance snapshot used by build_google_ads_dashboard.
 The s8e8 "Marketing ROI Report" xlsx is a manually-compiled finance report
 (production/collections figures are hand-entered from the practice management
 system each month) -- there is no live API for it. Whenever Finance shares a
-new export, re-run this script against it to push the parsed data into the
-"s8e8_finance_raw" tab of the same Google Sheet google_ads_raw/deals_raw live in
-(requires GOOGLE_SA_JSON + GOOGLE_SHEET_ID env vars, same as the other sync
-scripts). Raw data is never committed to this repo -- see .gitignore.
+new export, re-run this script against it and commit the regenerated CSV:
 
-    export GOOGLE_SA_JSON='...'
-    export GOOGLE_SHEET_ID='...'
     python3 scripts/update_s8e8_snapshot.py "/path/to/s8e8 - Marketing ROI Report.xlsx"
+    git add scripts/data/s8e8_google_ppc_snapshot.csv
+    git commit -m "Refresh s8e8 finance snapshot"
 
-Pass --out-csv to also dump a local CSV copy for inspection (gitignored, not
-committed) instead of/alongside writing to the Sheet.
+This is aggregate market/month data only (no patient-level info), so it's
+committed despite the general "no raw data" .gitignore rule -- see the
+explicit exception there. Overwrites
+scripts/data/s8e8_google_ppc_snapshot.csv in place.
 """
 import argparse
-import openpyxl, os, re, datetime, csv, json
+import openpyxl, re, datetime, csv, json
 from pathlib import Path
 
+DEFAULT_OUT_CSV = Path(__file__).resolve().parent / "data" / "s8e8_google_ppc_snapshot.csv"
 DEFAULT_LOG = Path(__file__).resolve().parent / "data" / "s8e8_google_ppc_snapshot.log.json"
 
 MONTHS = {m.lower(): i + 1 for i, m in enumerate(
@@ -345,35 +345,10 @@ def process_sheet(wb, sheet_name, market_name, log):
     return rows_out, log
 
 
-def write_to_sheet(all_rows):
-    import gspread
-    from google.oauth2.service_account import Credentials
-
-    creds = Credentials.from_service_account_info(
-        json.loads(os.environ["GOOGLE_SA_JSON"]),
-        scopes=["https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive"],
-    )
-    sh = gspread.authorize(creds).open_by_key(os.environ["GOOGLE_SHEET_ID"])
-    tab_name = "s8e8_finance_raw"
-    fieldnames = ['market', 'year', 'month', 'month_num', 'patients',
-                  'ad_spend', 'collections', 'cost_per_patient',
-                  'source_row', 'block_width', 'notes']
-    try:
-        ws = sh.worksheet(tab_name)
-        ws.clear()
-    except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title=tab_name, rows=len(all_rows) + 10, cols=len(fieldnames))
-    data = [fieldnames] + [[r.get(h, '') for h in fieldnames] for r in all_rows]
-    ws.update(data, value_input_option="RAW")
-    print(f"  ✓ wrote {len(all_rows)} rows to Sheet tab '{tab_name}'")
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("xlsx", help="Path to the s8e8 Marketing ROI Report xlsx")
-    ap.add_argument("--out-csv", help="Also/instead write a local CSV copy (gitignored, for inspection only)")
-    ap.add_argument("--skip-sheet", action="store_true", help="Don't write to the Google Sheet (just --out-csv)")
+    ap.add_argument("--out-csv", default=str(DEFAULT_OUT_CSV))
     ap.add_argument("--log", default=str(DEFAULT_LOG))
     args = ap.parse_args()
 
@@ -388,18 +363,14 @@ def main():
 
     all_rows.sort(key=lambda r: (r['market'], r['year'], r['month_num']))
 
-    if args.out_csv:
-        with open(args.out_csv, 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['market', 'year', 'month', 'month_num', 'patients',
-                                                    'ad_spend', 'collections', 'cost_per_patient',
-                                                    'source_row', 'block_width', 'notes'])
-            writer.writeheader()
-            for r in all_rows:
-                writer.writerow(r)
-        print(f"Wrote {len(all_rows)} rows to {args.out_csv}")
-
-    if not args.skip_sheet:
-        write_to_sheet(all_rows)
+    with open(args.out_csv, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=['market', 'year', 'month', 'month_num', 'patients',
+                                                'ad_spend', 'collections', 'cost_per_patient',
+                                                'source_row', 'block_width', 'notes'])
+        writer.writeheader()
+        for r in all_rows:
+            writer.writerow(r)
+    print(f"Wrote {len(all_rows)} rows to {args.out_csv}")
 
     with open(args.log, 'w') as f:
         json.dump(full_log, f, indent=2, default=str)
