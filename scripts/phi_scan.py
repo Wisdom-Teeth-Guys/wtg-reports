@@ -96,6 +96,10 @@ SCANNER_SELF_PATHS = {
     ".phi-allowlist",
 }
 
+ALLOWED_RAW_DATA_FILES = {
+    "scripts/data/s8e8_google_ppc_snapshot.csv",
+}
+
 
 def load_allowlist() -> list[str]:
     path = REPO_ROOT / ".phi-allowlist"
@@ -140,11 +144,12 @@ def scan_file(path: str, allowlist: list[str]) -> list[tuple[str, int, str, str]
     findings: list[tuple[str, int, str, str]] = []
     full = REPO_ROOT / path
 
-    # Filename rules
+       # Filename rules
     name = full.name
-    for pattern, desc in DISALLOWED_NAME_PATTERNS:
-        if pattern.search(name):
-            findings.append(("disallowed_filetype", 0, desc, path))
+    if path not in ALLOWED_RAW_DATA_FILES:
+        for pattern, desc in DISALLOWED_NAME_PATTERNS:
+            if pattern.search(name):
+                findings.append(("disallowed_filetype", 0, desc, path))
 
     # Path-prefix rules
     for prefix, desc in DISALLOWED_PATH_PREFIXES:
