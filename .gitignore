@@ -17,6 +17,7 @@ service-account-*.json
 marketer_reports/cache/
 marketer_reports/data/
 marketer_reports/scripts/audit/
+marketer_reports/visit_history_data.json
 
 # Exception: aggregate market/month finance snapshot (no patient-level data),
 # needed at Google-Ads-dashboard build time in GitHub Actions. Refreshed via

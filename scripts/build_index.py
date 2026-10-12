@@ -38,9 +38,34 @@ if MK_SRC.exists():
                 metadata[slug] = info
         except Exception as e:
             print(f"  ! couldn't parse marketers.yaml: {e}")
+    EXCLUDE_SLUGS = {"visit_history"}  # cross-rep tools, not individual marketer reports
+    # Reports that load a sibling data file at runtime (e.g. visit_history's
+    # fetch('visit_history_data.json')) need that file copied too -- *.html
+    # alone silently drops it, which 404s at runtime instead of failing the
+    # build. Frozen *_base.json source files aren't meant to be served
+    # directly (build_visit_history.py reads one and writes the real data
+    # file straight into out/), so they're excluded here.
+    for f in sorted(MK_SRC.glob("*.json")):
+        if "_base" in f.stem:
+            continue
+        shutil.copy(f, MK_OUT / f.name)
+    # Defensive fallback: if build_visit_history.py didn't run or failed, the
+    # live data files won't exist yet -- fall back to the frozen SPOTIO-only
+    # base rather than letting the report 404 on its own data.
+    for live_name, base_name in [
+        ("visit_history_data.json", "visit_history_base.json"),
+        ("visit_history_notes.json", "visit_history_base_notes.json"),
+    ]:
+        live_path = MK_OUT / live_name
+        base_path = MK_SRC / base_name
+        if not live_path.exists() and base_path.exists():
+            shutil.copy(base_path, live_path)
+            print(f"  ! {live_name} missing -- used frozen base as fallback")
     for f in sorted(MK_SRC.glob("*.html")):
         slug = f.stem
         shutil.copy(f, MK_OUT / f.name)
+        if slug in EXCLUDE_SLUGS:
+            continue
         info = metadata.get(slug, {})
         marketers.append({
             "filename": f.name,
@@ -141,6 +166,10 @@ footer {{ margin-top: 40px; text-align: center; color: #a0aec0; font-size: 12px;
     <h3>💰 Google Ads Dashboard</h3>
     <p>Google Ads spend by city + HubSpot deals attributed to Google Adwords PPC. Effective CPA by location.</p>
   </a>
+  <a class="card live" target="_blank" rel="noopener" href="marketer_reports/visit_history.html">
+    <h3>🚗 Field Visit History</h3>
+    <p>Every field visit, 2022–present — SPOTIO backfill + live MMC check-ins combined. Filter by rep/territory/date, export to CSV.</p>
+  </a>
 </div>
 
 <div class="section-title">Call-Center Tools <span class="live-badge">LIVE</span></div>
@@ -171,3 +200,15 @@ footer {{ margin-top: 40px; text-align: center; color: #a0aec0; font-size: 12px;
 print(f"  ✓ index.html")
 print(f"  ✓ {len(archived)} archived report(s) staged in out/archive/")
 print(f"  ✓ {len(marketers)} marketer report(s) staged in out/marketer_reports/")
+
+# Cloudflare Pages caches static assets by default. visit_history_data.json
+# is rebuilt nightly, so a cached copy would silently show stale data --
+# force revalidation on every load instead.
+(OUT_DIR / "_headers").write_text(
+    "/marketer_reports/visit_history_data.json\n"
+    "  Cache-Control: no-cache, must-revalidate\n"
+    "/marketer_reports/visit_history_notes.json\n"
+    "  Cache-Control: no-cache, must-revalidate\n",
+    encoding="utf-8",
+)
+print(f"  ✓ _headers")

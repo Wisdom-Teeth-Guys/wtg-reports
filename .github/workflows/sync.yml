@@ -4,6 +4,8 @@ on:
   schedule:
     # Daily at 6:00 AM Central (12:00 UTC)
     - cron: "0 12 * * *"
+    # Daily at 5:30 PM MST (00:30 UTC). MST is fixed UTC-7 (no DST adjustment).
+    - cron: "30 0 * * *"
   workflow_dispatch:
 
 # Prevent concurrent runs (they race on the Google Sheet rewrite)
@@ -81,6 +83,12 @@ jobs:
           GOOGLE_SA_JSON:  ${{ secrets.GOOGLE_SA_JSON }}
         run: python -u scripts/build_google_ads_dashboard.py
         continue-on-error: true
+
+      - name: Build Field Visit History
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+        run: python -u scripts/build_visit_history.py
+        continue-on-error: true  # serves last-good data if this hiccups
 
       - name: Build landing page
         run: python -u scripts/build_index.py
