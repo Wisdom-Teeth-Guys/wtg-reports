@@ -92,6 +92,29 @@
   .checks { display: flex; gap: 10px; }
   .checks label { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-secondary); }
   .spacer { flex: 1; }
+
+  .multiselect { position: relative; }
+  .multiselect-btn {
+    background: var(--surface-0); color: var(--text-primary); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 9px; font-size: 13px; min-width: 160px; text-align: left;
+    cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  }
+  .multiselect-btn:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .multiselect-btn .chevron { color: var(--text-muted); font-size: 10px; }
+  .multiselect-panel {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; min-width: 220px;
+    max-height: 280px; overflow-y: auto; background: var(--surface-0); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 6px;
+  }
+  .multiselect-panel .ms-actions { display: flex; gap: 8px; padding: 4px 6px 8px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+  .multiselect-panel .ms-actions button {
+    background: none; border: none; color: var(--series-spotio); font-size: 12px; cursor: pointer; padding: 0;
+  }
+  .multiselect-panel label {
+    display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 5px;
+    font-size: 13px; color: var(--text-primary); cursor: pointer; white-space: nowrap;
+  }
+  .multiselect-panel label:hover { background: var(--surface-2); }
   button.primary {
     background: var(--series-spotio); color: white; border: none; border-radius: 6px;
     padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
@@ -166,8 +189,19 @@
 
     <div class="filters">
       <div class="field">
-        <label for="fRep">Rep</label>
-        <select id="fRep"><option value="">All reps</option></select>
+        <label>Rep</label>
+        <div class="multiselect" id="fRepMulti">
+          <button type="button" class="multiselect-btn" id="fRepBtn" aria-haspopup="true" aria-expanded="false">
+            <span id="fRepBtnLabel">All reps</span><span class="chevron">&#9662;</span>
+          </button>
+          <div class="multiselect-panel" id="fRepPanel" hidden>
+            <div class="ms-actions">
+              <button type="button" id="fRepSelectAll">Select all</button>
+              <button type="button" id="fRepClear">Clear</button>
+            </div>
+            <div id="fRepOptions"></div>
+          </div>
+        </div>
       </div>
       <div class="field">
         <label for="fTerr">Territory</label>
@@ -241,6 +275,7 @@
   let page = 0;
   let sortCol = 'date';
   let sortDir = 1; // 1 = ascending, -1 = descending
+  let selectedReps = new Set();
 
   function getSortValue(r, col) {
     const [date, rep, company, terr, result, source, notes] = r;
@@ -312,16 +347,56 @@
     document.getElementById('app').style.display = 'block';
 
     // populate filter dropdowns
-    const repSel = document.getElementById('fRep');
+    const repOptions = document.getElementById('fRepOptions');
     DATA.reps.slice().sort().forEach(r => {
-      const o = document.createElement('option'); o.value = r; o.textContent = r; repSel.appendChild(o);
+      const label = document.createElement('label');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.value = r;
+      cb.addEventListener('change', () => {
+        if (cb.checked) selectedReps.add(r); else selectedReps.delete(r);
+        updateRepButtonLabel();
+        page = 0;
+        applyFilters();
+      });
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(r));
+      repOptions.appendChild(label);
     });
+
+    const repBtn = document.getElementById('fRepBtn');
+    const repPanel = document.getElementById('fRepPanel');
+    repBtn.addEventListener('click', () => {
+      const open = !repPanel.hidden;
+      repPanel.hidden = open;
+      repBtn.setAttribute('aria-expanded', String(!open));
+    });
+    document.addEventListener('click', e => {
+      if (!document.getElementById('fRepMulti').contains(e.target)) {
+        repPanel.hidden = true;
+        repBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+    document.getElementById('fRepSelectAll').addEventListener('click', () => {
+      selectedReps = new Set(DATA.reps);
+      repOptions.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+      updateRepButtonLabel();
+      page = 0;
+      applyFilters();
+    });
+    document.getElementById('fRepClear').addEventListener('click', () => {
+      selectedReps.clear();
+      repOptions.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+      updateRepButtonLabel();
+      page = 0;
+      applyFilters();
+    });
+
     const terrSel = document.getElementById('fTerr');
     DATA.territories.slice().sort().forEach(t => {
       const o = document.createElement('option'); o.value = t; o.textContent = t; terrSel.appendChild(o);
     });
 
-    ['fRep','fTerr','fFrom','fTo','fSpotio','fMmc'].forEach(id =>
+    ['fTerr','fFrom','fTo','fSpotio','fMmc'].forEach(id =>
       document.getElementById(id).addEventListener('change', () => { page = 0; applyFilters(); }));
     document.getElementById('fCompany').addEventListener('input', debounce(() => { page = 0; applyFilters(); }, 200));
     document.getElementById('fZip').addEventListener('input', debounce(() => { page = 0; applyFilters(); }, 200));
@@ -353,11 +428,20 @@
 
   function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
+  function updateRepButtonLabel() {
+    const label = document.getElementById('fRepBtnLabel');
+    if (selectedReps.size === 0) label.textContent = 'All reps';
+    else if (selectedReps.size === 1) label.textContent = [...selectedReps][0];
+    else label.textContent = `${selectedReps.size} reps selected`;
+  }
+
   const escapeDiv = document.createElement('div');
   function escapeHtml(s) { escapeDiv.textContent = s; return escapeDiv.innerHTML; }
 
   function clearFilters() {
-    document.getElementById('fRep').value = '';
+    selectedReps.clear();
+    document.querySelectorAll('#fRepOptions input[type="checkbox"]').forEach(cb => cb.checked = false);
+    updateRepButtonLabel();
     document.getElementById('fTerr').value = '';
     document.getElementById('fCompany').value = '';
     document.getElementById('fZip').value = '';
@@ -371,7 +455,6 @@
   }
 
   function applyFilters() {
-    const repVal = document.getElementById('fRep').value;
     const terrVal = document.getElementById('fTerr').value;
     const companyVal = document.getElementById('fCompany').value.trim().toLowerCase();
     const zipVal = document.getElementById('fZip').value.trim();
@@ -381,12 +464,14 @@
     const showSpotio = document.getElementById('fSpotio').checked;
     const showMmc = document.getElementById('fMmc').checked;
 
-    const repIdx = repVal ? DATA.reps.indexOf(repVal) : -1;
     const terrIdx = terrVal ? DATA.territories.indexOf(terrVal) : -1;
+    const repIdxSet = selectedReps.size
+      ? new Set([...selectedReps].map(r => DATA.reps.indexOf(r)))
+      : null;
 
     filtered = DATA.rows.filter(r => {
       const [date, rep, company, terr, result, source, notes] = r;
-      if (repIdx >= 0 && rep !== repIdx) return false;
+      if (repIdxSet && !repIdxSet.has(rep)) return false;
       if (terrIdx >= 0 && terr !== terrIdx) return false;
       if (source === 0 && !showSpotio) return false;
       if (source === 1 && !showMmc) return false;
