@@ -38,7 +38,7 @@ if MK_SRC.exists():
                 metadata[slug] = info
         except Exception as e:
             print(f"  ! couldn't parse marketers.yaml: {e}")
-    EXCLUDE_SLUGS = {"visit_history"}  # cross-rep tools, not individual marketer reports
+    EXCLUDE_SLUGS = {"visit_history", "funnel_dashboard"}  # cross-rep tools, not individual marketer reports
     # Reports that load a sibling data file at runtime (e.g. visit_history's
     # fetch('visit_history_data.json')) need that file copied too -- *.html
     # alone silently drops it, which 404s at runtime instead of failing the
@@ -181,6 +181,14 @@ footer {{ margin-top: 40px; text-align: center; color: #a0aec0; font-size: 12px;
   <a class="card live" target="_blank" rel="noopener" href="https://ask.wisdomteethguys.com">
     <h3>💬 Ask the Data</h3>
     <p>Ask the call data anything in plain English — "answer rate by market last week", "busiest hours", a specific agent or call. Sign in with your WTG account.</p>
+  </a>
+</div>
+
+<div class="section-title">Patient Funnel Dashboard</div>
+<div class="grid">
+  <a class="card live" target="_blank" rel="noopener" href="marketer_reports/funnel_dashboard.html">
+    <h3>🧭 Patient Funnel Dashboard</h3>
+    <p>Deal creation → insurance obtained → verified → scheduled → won, by market and insurance type. Filter by date range, compare two periods side by side. Snapshot as of build time — not auto-updating yet.</p>
   </a>
 </div>
 
