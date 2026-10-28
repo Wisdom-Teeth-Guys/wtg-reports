@@ -25,13 +25,29 @@
   .filters { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
   .filter-group label.title { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; font-weight: 500; }
   .filter-group { min-width: 160px; }
-  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; max-width: 420px; }
-  .chip {
-    border: 0.5px solid var(--border-strong); border-radius: 100px; padding: 4px 11px;
-    font-size: 12.5px; cursor: pointer; background: var(--surface-1); color: var(--text-secondary);
-    user-select: none;
+  .msdd { position: relative; display: inline-block; min-width: 200px; }
+  .msdd-btn {
+    width: 100%; text-align: left; border: 0.5px solid var(--border-strong); border-radius: 8px;
+    padding: 6px 10px; font-size: 13px; background: var(--surface-1); color: var(--text-primary);
+    cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px;
   }
-  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .msdd-btn .chev { color: var(--text-muted); font-size: 11px; }
+  .msdd-panel {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
+    background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 8px;
+    padding: 6px; min-width: 100%; max-height: 260px; overflow-y: auto;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  }
+  .msdd-panel.open { display: block; }
+  .msdd-panel label {
+    display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 6px;
+    font-size: 12.5px; cursor: pointer; white-space: nowrap;
+  }
+  .msdd-panel label:hover { background: var(--surface-1); }
+  .msdd-actions { display: flex; gap: 10px; padding: 6px 6px 2px; border-top: 0.5px solid var(--border); margin-top: 4px; }
+  .msdd-actions button {
+    background: none; border: none; color: var(--accent); font-size: 11.5px; cursor: pointer; padding: 0;
+  }
   input[type=month] {
     border: 0.5px solid var(--border-strong); border-radius: 8px; padding: 6px 8px;
     font-size: 13px; background: var(--surface-1); color: var(--text-primary);
@@ -83,15 +99,15 @@
   </div>
   <div class="filter-group">
     <label class="title">Pipelines (markets)</label>
-    <div class="chip-row" id="marketChips"></div>
+    <div class="msdd" id="marketDropdown"></div>
   </div>
   <div class="filter-group">
     <label class="title">Insurance types</label>
-    <div class="chip-row" id="insuranceChips"></div>
+    <div class="msdd" id="insuranceDropdown"></div>
   </div>
   <div class="filter-group">
     <label class="title">Lead source</label>
-    <div class="chip-row" id="sourceChips"></div>
+    <div class="msdd" id="sourceDropdown"></div>
   </div>
 </div>
 
@@ -162,9 +178,17 @@ function withAlpha(hex, alpha) {
   return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${alpha})`;
 }
 
-let ALL_MARKETS = [], ALL_ITYPES = [], ALL_SOURCES = [], ALL_MONTHS = [];
+let ALL_MARKETS = [], ALL_ITYPES = [], DISPLAYED_ITYPES = [], ALL_SOURCES = [], ALL_MONTHS = [];
 let state = {};
 let WIN_RATE_LOOKUP = null;
+
+// Medical is a single near-empty plan (0-2 deals) -- noise, not a real
+// category. Unassigned means we never captured insurance for the deal at
+// all -- that's a data-quality gap to fix, not a patient segment to chart
+// alongside Medicaid/PPO/etc. Both stay in the overall funnel totals
+// (Deals created, etc. still count everyone) -- they're just excluded from
+// the insurance-type breakdown filter and charts specifically.
+const HIDDEN_ITYPES = new Set(['Medical', 'Unassigned']);
 
 function init(rows, generatedAt) {
   DATA = rows;
@@ -174,6 +198,7 @@ function init(rows, generatedAt) {
 
   ALL_MARKETS = [...new Set(DATA.map(r=>r.market))].sort();
   ALL_ITYPES = [...new Set(DATA.map(r=>r.insurance_type))].sort();
+  DISPLAYED_ITYPES = ALL_ITYPES.filter(t => !HIDDEN_ITYPES.has(t));
   ALL_SOURCES = [...new Set(DATA.map(r=>r.lead_source))].sort();
   ALL_MONTHS = [...new Set(DATA.map(r=>r.month))].sort();
 
@@ -200,9 +225,9 @@ function init(rows, generatedAt) {
     render();
   });
 
-  buildChips('marketChips', ALL_MARKETS, state.markets, chipHandlerMarket);
-  buildChips('insuranceChips', ALL_ITYPES, state.itypes, chipHandlerInsurance);
-  buildChips('sourceChips', ALL_SOURCES, state.sources, chipHandlerSource);
+  buildMultiSelectDropdown('marketDropdown', ALL_MARKETS, state.markets);
+  buildMultiSelectDropdown('insuranceDropdown', DISPLAYED_ITYPES, state.itypes);
+  buildMultiSelectDropdown('sourceDropdown', ALL_SOURCES, state.sources);
 
   render();
 }
@@ -220,23 +245,63 @@ function wireMonthInput(id, initialValue, onChange) {
   el.addEventListener('change', (e) => { if (e.target.value) onChange(e.target.value); });
 }
 
-function buildChips(containerId, values, activeSet, onToggle) {
+// Multi-select dropdown: a button showing "All (N)" / "3 selected" / a
+// single value, opening a checkbox panel. Checkbox toggles mutate the Set
+// and re-render in place (label text + checked state) WITHOUT rebuilding
+// the panel's markup, so it stays open across multiple clicks -- rebuilding
+// on every toggle (the chip-row's old behavior) closed the menu after each
+// pick, which is unusable for picking several items in a row.
+// `values` is the full set of real options a user can pick from; never
+// allowed to land on zero selected (falls back to "all") since an empty
+// filter would silently blank every chart rather than show everything.
+function buildMultiSelectDropdown(containerId, values, activeSet) {
   const el = document.getElementById(containerId);
-  el.innerHTML = '';
-  values.forEach(v => {
-    const chip = document.createElement('div');
-    chip.className = 'chip' + (activeSet.has(v) ? ' active' : '');
-    chip.textContent = v;
-    chip.onclick = () => { onToggle(v); };
-    el.appendChild(chip);
+  const activeCount = () => values.filter(v => activeSet.has(v)).length;
+  const label = () => {
+    const n = activeCount();
+    if (n === values.length) return `All (${values.length})`;
+    if (n === 1) return values.find(v => activeSet.has(v));
+    return `${n} selected`;
+  };
+  el.innerHTML = `
+    <button type="button" class="msdd-btn"><span class="msdd-label">${label()}</span><span class="chev">&#9662;</span></button>
+    <div class="msdd-panel">
+      ${values.map(v => `<label><input type="checkbox" value="${v.replace(/"/g,'&quot;')}" ${activeSet.has(v)?'checked':''}> ${v}</label>`).join('')}
+      <div class="msdd-actions"><button type="button" data-action="all">Select all</button></div>
+    </div>`;
+  const labelEl = el.querySelector('.msdd-label');
+  const panel = el.querySelector('.msdd-panel');
+  el.querySelector('.msdd-btn').onclick = (e) => {
+    e.stopPropagation();
+    const willOpen = !panel.classList.contains('open');
+    document.querySelectorAll('.msdd-panel.open').forEach(p => p.classList.remove('open'));
+    if (willOpen) panel.classList.add('open');
+  };
+  function refresh() {
+    labelEl.textContent = label();
+    render();
+  }
+  panel.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.onchange = () => {
+      if (cb.checked) activeSet.add(cb.value); else activeSet.delete(cb.value);
+      if (activeCount() === 0) {
+        values.forEach(v => activeSet.add(v));
+        panel.querySelectorAll('input[type=checkbox]').forEach(x => x.checked = true);
+      }
+      refresh();
+    };
   });
+  panel.querySelector('[data-action="all"]').onclick = () => {
+    values.forEach(v => activeSet.add(v));
+    panel.querySelectorAll('input[type=checkbox]').forEach(x => x.checked = true);
+    refresh();
+  };
 }
-
-function toggleSetValue(set, v, allValues, render) {
-  if (set.has(v)) { set.delete(v); } else { set.add(v); }
-  if (set.size === 0) { allValues.forEach(x=>set.add(x)); }
-  render();
-}
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.msdd-panel.open').forEach(p => {
+    if (!p.parentElement.contains(e.target)) p.classList.remove('open');
+  });
+});
 
 // Projecting a brand-new lead's eventual outcome from elapsed time alone
 // doesn't work -- a lead from today has no elapsed time to extrapolate
@@ -331,13 +396,13 @@ function insuranceWinRates(rows) {
   const byType = {};
   ALL_ITYPES.forEach(t => byType[t] = { won:0, lost:0 });
   rows.forEach(r => { byType[r.insurance_type].won += r.won; byType[r.insurance_type].lost += r.lost; });
-  const labels = ALL_ITYPES.filter(t => state.itypes.has(t));
+  const labels = DISPLAYED_ITYPES.filter(t => state.itypes.has(t));
   const rates = labels.map(t => { const w=byType[t].won, l=byType[t].lost; return (w+l) ? 100*w/(w+l) : 0; });
   return { labels, rates };
 }
 
 function insuranceCreatedSeries(rows, months) {
-  const types = ALL_ITYPES.filter(t => state.itypes.has(t));
+  const types = DISPLAYED_ITYPES.filter(t => state.itypes.has(t));
   const byMonthType = {};
   months.forEach(m => { byMonthType[m] = {}; types.forEach(t => byMonthType[m][t] = 0); });
   rows.forEach(r => { if (byMonthType[r.month] && types.includes(r.insurance_type)) byMonthType[r.month][r.insurance_type] += r.created; });
@@ -635,10 +700,6 @@ function removeLegend(chartId) {
   const wrap = panel.querySelector('.legend');
   if (wrap) wrap.remove();
 }
-
-function chipHandlerMarket(v) { toggleSetValue(state.markets, v, ALL_MARKETS, () => { buildChips('marketChips', ALL_MARKETS, state.markets, chipHandlerMarket); render(); }); }
-function chipHandlerInsurance(v) { toggleSetValue(state.itypes, v, ALL_ITYPES, () => { buildChips('insuranceChips', ALL_ITYPES, state.itypes, chipHandlerInsurance); render(); }); }
-function chipHandlerSource(v) { toggleSetValue(state.sources, v, ALL_SOURCES, () => { buildChips('sourceChips', ALL_SOURCES, state.sources, chipHandlerSource); render(); }); }
 
 fetch('funnel_dashboard_data.json')
   .then(r => r.json())
