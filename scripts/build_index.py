@@ -55,6 +55,7 @@ if MK_SRC.exists():
     for live_name, base_name in [
         ("visit_history_data.json", "visit_history_base.json"),
         ("visit_history_notes.json", "visit_history_base_notes.json"),
+        ("funnel_dashboard_data.json", "funnel_dashboard_base.json"),
     ]:
         live_path = MK_OUT / live_name
         base_path = MK_SRC / base_name
@@ -170,6 +171,10 @@ footer {{ margin-top: 40px; text-align: center; color: #a0aec0; font-size: 12px;
     <h3>🚗 Field Visit History</h3>
     <p>Every field visit, 2022–present — SPOTIO backfill + live MMC check-ins combined. Filter by rep/territory/date, export to CSV.</p>
   </a>
+  <a class="card live" target="_blank" rel="noopener" href="marketer_reports/funnel_dashboard.html">
+    <h3>🧭 Patient Funnel Dashboard</h3>
+    <p>Deal creation → insurance obtained → verified → scheduled → won, by market, insurance type, and lead source. Filter by date range, compare two periods side by side.</p>
+  </a>
 </div>
 
 <div class="section-title">Call-Center Tools <span class="live-badge">LIVE</span></div>
@@ -181,14 +186,6 @@ footer {{ margin-top: 40px; text-align: center; color: #a0aec0; font-size: 12px;
   <a class="card live" target="_blank" rel="noopener" href="https://ask.wisdomteethguys.com">
     <h3>💬 Ask the Data</h3>
     <p>Ask the call data anything in plain English — "answer rate by market last week", "busiest hours", a specific agent or call. Sign in with your WTG account.</p>
-  </a>
-</div>
-
-<div class="section-title">Patient Funnel Dashboard</div>
-<div class="grid">
-  <a class="card live" target="_blank" rel="noopener" href="marketer_reports/funnel_dashboard.html">
-    <h3>🧭 Patient Funnel Dashboard</h3>
-    <p>Deal creation → insurance obtained → verified → scheduled → won, by market and insurance type. Filter by date range, compare two periods side by side. Snapshot as of build time — not auto-updating yet.</p>
   </a>
 </div>
 
